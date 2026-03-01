@@ -145,12 +145,12 @@ class App(ctk.CTk):
         self.pdf_label = ctk.CTkLabel(left_frame, text="PDFを開いてください", takefocus=True)
         self.pdf_label.grid(row=0, column=0, sticky="nsew", pady=(0, 10))
         self.pdf_label.bind("<Button-1>", lambda event: self.pdf_label.focus_set())
-        self.pdf_label.bind("<Left>", self.on_preview_left_key)
-        self.pdf_label.bind("<Right>", self.on_preview_right_key)
         self.pdf_label.bind("<Home>", self.on_preview_home_key)
         self.pdf_label.bind("<End>", self.on_preview_end_key)
         self.pdf_label.bind("<Prior>", self.on_preview_pageup_key)
         self.pdf_label.bind("<Next>", self.on_preview_pagedown_key)
+        self.pdf_label.bind("<Control-Prior>", self.on_preview_ctrl_pageup_key)
+        self.pdf_label.bind("<Control-Next>", self.on_preview_ctrl_pagedown_key)
         self.pdf_label.bind("<Return>", self.on_preview_enter_key)
         self.pdf_label.bind("<KP_Enter>", self.on_preview_enter_key)
         self.pdf_label.bind("<Shift-Return>", self.on_shift_enter_execute_key)
@@ -206,7 +206,7 @@ class App(ctk.CTk):
         self.btn_open = ctk.CTkButton(right_frame, text="PDFを開く", command=self.open_pdf)
         self.btn_open.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
 
-        self.btn_clear_split = ctk.CTkButton(right_frame, text="分割点をリセット", 
+        self.btn_clear_split = ctk.CTkButton(right_frame, text="すべての分割点をリセット", 
                                              command=self.clear_split_points, fg_color="gray", hover_color="darkgray",
                                              state="disabled")
         self.btn_clear_split.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
@@ -215,6 +215,8 @@ class App(ctk.CTk):
             right_frame,
             text="全体を1ページずつ分割する",
             command=self.split_every_page,
+            fg_color="#b04a4a",
+            hover_color="#953f3f",
             state="disabled"
         )
         self.btn_split_every_page.grid(row=3, column=0, sticky="ew", padx=10, pady=5)
@@ -288,18 +290,19 @@ class App(ctk.CTk):
             self.current_page_idx = min(len(self.doc) - 1, self.current_page_idx + 10)
             self.render_page()
 
-    def on_preview_left_key(self, event):
-        self.prev_page()
-
-    def on_preview_right_key(self, event):
-        self.next_page()
-        return "break"
-
     def on_preview_pageup_key(self, event):
-        self.prev_10_pages()
+        self.prev_page()
         return "break"
 
     def on_preview_pagedown_key(self, event):
+        self.next_page()
+        return "break"
+
+    def on_preview_ctrl_pageup_key(self, event):
+        self.prev_10_pages()
+        return "break"
+
+    def on_preview_ctrl_pagedown_key(self, event):
         self.next_10_pages()
         return "break"
 
