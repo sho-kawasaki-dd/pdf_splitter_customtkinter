@@ -1,5 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
+from pathlib import Path
+import threading
 import customtkinter as ctk
 import fitz  # PyMuPDF
 from PIL import Image, ImageTk
@@ -130,6 +132,8 @@ class App(ctk.CTk):
         self.preview_zoom_step = 0.1
         self.preview_image_tk = None
         self.preview_can_pan = False
+        self.is_splitting = False
+        self.source_pdf_path = None
 
         self.grid_columnconfigure(0, weight=7)
         self.grid_columnconfigure(1, weight=3)
@@ -277,11 +281,16 @@ class App(ctk.CTk):
         self.btn_execute.grid(row=6, column=0, sticky="ew", padx=10, pady=10)
 
     def open_pdf(self):
+        if self.is_splitting:
+            messagebox.showinfo("実行中", "分割処理の実行中はPDFを開けません。")
+            return
+
         file_path = filedialog.askopenfilename(title="PDFファイルを選択", filetypes=[("PDF Files", "*.pdf")])
         if file_path:
             if self.doc:
                 self.doc.close()
             self.doc = fitz.open(file_path)
+            self.source_pdf_path = file_path
             self.current_page_idx = 0
             self.split_points = []
             self.preview_zoom = 1.0
@@ -292,26 +301,22 @@ class App(ctk.CTk):
         if not self.doc: return
 
         page = self.doc.load_page(self.current_page_idx)
-        # 画像化 (ベース解像度で描画し、表示サイズ側でズームを反映)
-        base_render_scale = 1.5
-        pix = page.get_pixmap(matrix=fitz.Matrix(base_render_scale, base_render_scale))
-        mode = "RGBA" if pix.alpha else "RGB"
-        img = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
+        page_rect = page.rect
 
-        # 表示領域に合わせて画像をリサイズしつつアスペクト比を維持
         frame_width = self.preview_canvas.winfo_width()
         frame_height = self.preview_canvas.winfo_height()
-        
+
         # 初回レンダリング時などサイズが取得できない場合のフォールバック
         if frame_width <= 1 or frame_height <= 1:
             frame_width, frame_height = 500, 600
 
-        fit_ratio = min(frame_width / img.width, frame_height / img.height)
-        zoomed_ratio = fit_ratio * self.preview_zoom
-        target_width = max(1, int(img.width * zoomed_ratio))
-        target_height = max(1, int(img.height * zoomed_ratio))
-        if target_width != img.width or target_height != img.height:
-            img = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
+        fit_ratio = min(frame_width / page_rect.width, frame_height / page_rect.height)
+        final_scale = max(0.01, fit_ratio * self.preview_zoom)
+        pix = page.get_pixmap(matrix=fitz.Matrix(final_scale, final_scale))
+        mode = "RGBA" if pix.alpha else "RGB"
+        img = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
+        target_width = img.width
+        target_height = img.height
 
         self.preview_image_tk = ImageTk.PhotoImage(img)
         self.preview_canvas.delete("all")
@@ -448,7 +453,7 @@ class App(ctk.CTk):
         return "break"
 
     def on_shift_enter_execute_key(self, event):
-        if not self.doc or self.btn_execute.cget("state") != "normal":
+        if not self.doc or self.is_splitting or self.btn_execute.cget("state") != "normal":
             return "break"
 
         self.execute_split()
@@ -540,7 +545,9 @@ class App(ctk.CTk):
             lbl_range = ctk.CTkLabel(item_frame, text=f"P.{start+1} - P.{end+1}", width=80, anchor="w")
             lbl_range.grid(row=0, column=1, padx=5)
 
-            txt_filename = ctk.CTkEntry(item_frame, placeholder_text=f"output_part{i+1}.pdf")
+            default_filename = f"output_part{i+1}.pdf"
+            txt_filename = ctk.CTkEntry(item_frame)
+            txt_filename.insert(0, default_filename)
             txt_filename.grid(row=0, column=2, sticky="ew")
 
             clickable_widgets = [item_frame, marker, lbl_range]
@@ -571,6 +578,16 @@ class App(ctk.CTk):
         state_split_every_page = "normal" if self.doc and len(self.doc) > 1 else "disabled"
         state_exec = "normal" if self.doc else "disabled"
 
+        if self.is_splitting:
+            state_prev = "disabled"
+            state_next = "disabled"
+            state_add = "disabled"
+            state_remove = "disabled"
+            state_clear_split = "disabled"
+            state_split_every_page = "disabled"
+            state_exec = "disabled"
+
+        self.btn_open.configure(state="disabled" if self.is_splitting else "normal")
         self.btn_prev.configure(state=state_prev)
         self.btn_prev_10.configure(state=state_prev)
         self.btn_next.configure(state=state_next)
@@ -581,32 +598,101 @@ class App(ctk.CTk):
         self.btn_split_every_page.configure(state=state_split_every_page)
         self.btn_execute.configure(state=state_exec)
 
-    def execute_split(self):
-        if not self.doc: return
+    def _ensure_unique_output_path(self, output_dir, filename):
+        target_path = output_dir / filename
+        stem = target_path.stem
+        suffix = target_path.suffix
+        counter = 1
 
-        out_dir = filedialog.askdirectory(title="保存先フォルダを選択")
-        if not out_dir: return
+        while target_path.exists():
+            target_path = output_dir / f"{stem} ({counter}){suffix}"
+            counter += 1
+
+        return target_path
+
+    def _collect_split_jobs(self):
+        jobs = []
 
         for i, widget_dict in enumerate(self.section_widgets):
             start = widget_dict['start']
             end = widget_dict['end']
             entry = widget_dict['entry']
-            
+
             filename = entry.get().strip()
             if not filename:
-                # CTkEntryのcgetでplaceholder_textを取得
-                filename = entry.cget("placeholder_text")
+                filename = f"output_part{i+1}.pdf"
             if not filename.lower().endswith(".pdf"):
                 filename += ".pdf"
-                
-            out_path = f"{out_dir}/{filename}"
-            
-            new_doc = fitz.open()
-            new_doc.insert_pdf(self.doc, from_page=start, to_page=end)
-            new_doc.save(out_path)
-            new_doc.close()
-            
-        messagebox.showinfo("完了", "PDFの分割が完了しました。")
+
+            jobs.append({
+                'index': i + 1,
+                'start': start,
+                'end': end,
+                'filename': filename,
+            })
+
+        return jobs
+
+    def _set_split_running(self, is_running):
+        self.is_splitting = is_running
+        self.update_ui_state()
+
+    def _on_split_success(self, file_count):
+        self._set_split_running(False)
+        messagebox.showinfo("完了", f"PDFの分割が完了しました。\n作成ファイル数: {file_count}")
+
+    def _on_split_error(self, error_message):
+        self._set_split_running(False)
+        messagebox.showerror("保存エラー", error_message)
+
+    def _split_worker(self, source_pdf_path, out_dir, jobs):
+        output_dir = Path(out_dir)
+
+        try:
+            with fitz.open(source_pdf_path) as source_doc:
+                for job in jobs:
+                    out_path = self._ensure_unique_output_path(output_dir, job['filename'])
+
+                    with fitz.open() as new_doc:
+                        new_doc.insert_pdf(source_doc, from_page=job['start'], to_page=job['end'])
+                        new_doc.save(str(out_path))
+
+        except Exception as e:
+            self.after(
+                0,
+                lambda: self._on_split_error(
+                    f"{job['index']}番目のセクション（{job['filename']}）の保存中にエラーが発生しました:\n{e}"
+                ),
+            )
+            return
+
+        self.after(0, lambda: self._on_split_success(len(jobs)))
+
+    def execute_split(self):
+        if not self.doc or self.is_splitting:
+            return
+
+        out_dir = filedialog.askdirectory(title="保存先フォルダを選択")
+        if not out_dir:
+            return
+
+        if not self.source_pdf_path:
+            messagebox.showerror("エラー", "元PDFのパスが取得できませんでした。PDFを開き直してください。")
+            return
+
+        jobs = self._collect_split_jobs()
+        if not jobs:
+            messagebox.showerror("エラー", "分割対象のセクションがありません。")
+            return
+
+        self._set_split_running(True)
+
+        worker = threading.Thread(
+            target=self._split_worker,
+            args=(self.source_pdf_path, out_dir, jobs),
+            daemon=True,
+        )
+        worker.start()
 
 if __name__ == "__main__":
     app = App()
