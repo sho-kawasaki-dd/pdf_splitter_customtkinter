@@ -12,7 +12,7 @@ class CustomSplitBar(tk.Canvas):
     """
     標準のtkinter.Canvasを使って、色分けされたバーを描画するクラス
     """
-    def __init__(self, master, **kwargs):
+    def __init__(self, master, on_page_click=None, **kwargs):
         # 背景色をCustomTkinterの背景に馴染ませるための処理
         bg_color = master.cget("fg_color")
         if isinstance(bg_color, tuple) or isinstance(bg_color, list):
@@ -25,14 +25,45 @@ class CustomSplitBar(tk.Canvas):
         self.total_pages = 0
         self.current_page = 0
         self.split_points = []
+        self.on_page_click = on_page_click
         
         self.colors = ["#3498db", "#e74c3c", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c"]
         
         # ウィンドウリサイズ時に再描画するためのバインド
         self.bind("<Configure>", self.on_resize)
+        self.bind("<Button-1>", self.on_click)
+        self.bind("<B1-Motion>", self.on_drag)
 
     def on_resize(self, event):
         self.draw()
+
+    def _event_to_page(self, event):
+        if self.total_pages <= 0:
+            return None
+
+        width = self.winfo_width()
+        if width <= 1:
+            return None
+
+        x_pos = min(max(event.x, 0), width - 1)
+        target_page = int((x_pos / width) * self.total_pages)
+        return min(max(target_page, 0), self.total_pages - 1)
+
+    def on_click(self, event):
+        target_page = self._event_to_page(event)
+        if target_page is None:
+            return
+
+        if self.on_page_click:
+            self.on_page_click(target_page)
+
+    def on_drag(self, event):
+        target_page = self._event_to_page(event)
+        if target_page is None:
+            return
+
+        if self.on_page_click:
+            self.on_page_click(target_page)
 
     def update_state(self, total, current, splits):
         self.total_pages = total
@@ -108,11 +139,18 @@ class App(ctk.CTk):
         left_frame.grid_columnconfigure(0, weight=1)
 
         # PDFプレビュー領域
-        self.pdf_label = ctk.CTkLabel(left_frame, text="PDFを開いてください")
+        self.pdf_label = ctk.CTkLabel(left_frame, text="PDFを開いてください", takefocus=True)
         self.pdf_label.grid(row=0, column=0, sticky="nsew", pady=(0, 10))
+        self.pdf_label.bind("<Button-1>", lambda event: self.pdf_label.focus_set())
+        self.pdf_label.bind("<Left>", self.on_preview_left_key)
+        self.pdf_label.bind("<Right>", self.on_preview_right_key)
+        self.pdf_label.bind("<Home>", self.on_preview_home_key)
+        self.pdf_label.bind("<End>", self.on_preview_end_key)
+        self.pdf_label.bind("<Prior>", self.on_preview_pageup_key)
+        self.pdf_label.bind("<Next>", self.on_preview_pagedown_key)
 
         # カスタム色分けプログレスバー (tk.CanvasをCTkFrameに配置)
-        self.split_bar = CustomSplitBar(left_frame)
+        self.split_bar = CustomSplitBar(left_frame, on_page_click=self.go_to_page)
         self.split_bar.grid(row=1, column=0, sticky="ew", pady=(0, 10))
 
         # ナビゲーション領域
@@ -218,6 +256,38 @@ class App(ctk.CTk):
     def next_10_pages(self):
         if self.doc and self.current_page_idx < len(self.doc) - 1:
             self.current_page_idx = min(len(self.doc) - 1, self.current_page_idx + 10)
+            self.render_page()
+
+    def on_preview_left_key(self, event):
+        self.prev_page()
+
+    def on_preview_right_key(self, event):
+        self.next_page()
+        return "break"
+
+    def on_preview_pageup_key(self, event):
+        self.prev_10_pages()
+        return "break"
+
+    def on_preview_pagedown_key(self, event):
+        self.next_10_pages()
+        return "break"
+
+    def on_preview_home_key(self, event):
+        self.go_to_page(0)
+        return "break"
+
+    def on_preview_end_key(self, event):
+        if self.doc:
+            self.go_to_page(len(self.doc) - 1)
+        return "break"
+
+    def go_to_page(self, page_idx):
+        if not self.doc:
+            return
+
+        if 0 <= page_idx < len(self.doc) and page_idx != self.current_page_idx:
+            self.current_page_idx = page_idx
             self.render_page()
 
     def add_split_point(self):
