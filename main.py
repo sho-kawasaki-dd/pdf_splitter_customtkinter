@@ -118,16 +118,22 @@ class App(ctk.CTk):
         # ナビゲーション領域
         nav_frame = ctk.CTkFrame(left_frame, fg_color="transparent")
         nav_frame.grid(row=2, column=0, sticky="ew")
-        nav_frame.grid_columnconfigure((0, 1, 2), weight=1)
+        nav_frame.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
 
-        self.btn_prev = ctk.CTkButton(nav_frame, text="<< 前のページ", command=self.prev_page, state="disabled")
-        self.btn_prev.grid(row=0, column=0, padx=5)
+        self.btn_prev_10 = ctk.CTkButton(nav_frame, text="<< -10", width=80, command=self.prev_10_pages, state="disabled")
+        self.btn_prev_10.grid(row=0, column=0, padx=5)
+
+        self.btn_prev = ctk.CTkButton(nav_frame, text="< 前のページ", command=self.prev_page, state="disabled")
+        self.btn_prev.grid(row=0, column=1, padx=5)
 
         self.lbl_page_info = ctk.CTkLabel(nav_frame, text="0 / 0")
-        self.lbl_page_info.grid(row=0, column=1)
+        self.lbl_page_info.grid(row=0, column=2)
 
-        self.btn_next = ctk.CTkButton(nav_frame, text="次のページ >>", command=self.next_page, state="disabled")
-        self.btn_next.grid(row=0, column=2, padx=5)
+        self.btn_next = ctk.CTkButton(nav_frame, text="次のページ >", command=self.next_page, state="disabled")
+        self.btn_next.grid(row=0, column=3, padx=5)
+
+        self.btn_next_10 = ctk.CTkButton(nav_frame, text="+10 >>", width=80, command=self.next_10_pages, state="disabled")
+        self.btn_next_10.grid(row=0, column=4, padx=5)
 
     def init_right_frame(self):
         right_frame = ctk.CTkFrame(self)
@@ -204,6 +210,16 @@ class App(ctk.CTk):
             self.current_page_idx += 1
             self.render_page()
 
+    def prev_10_pages(self):
+        if self.doc and self.current_page_idx > 0:
+            self.current_page_idx = max(0, self.current_page_idx - 10)
+            self.render_page()
+
+    def next_10_pages(self):
+        if self.doc and self.current_page_idx < len(self.doc) - 1:
+            self.current_page_idx = min(len(self.doc) - 1, self.current_page_idx + 10)
+            self.render_page()
+
     def add_split_point(self):
         if not self.doc: return
         if self.current_page_idx > 0 and self.current_page_idx not in self.split_points:
@@ -265,7 +281,9 @@ class App(ctk.CTk):
         state_exec = "normal" if self.doc else "disabled"
 
         self.btn_prev.configure(state=state_prev)
+        self.btn_prev_10.configure(state=state_prev)
         self.btn_next.configure(state=state_next)
+        self.btn_next_10.configure(state=state_next)
         self.btn_add_split.configure(state=state_add)
         self.btn_execute.configure(state=state_exec)
 
