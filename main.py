@@ -189,18 +189,26 @@ class App(ctk.CTk):
                                              command=self.clear_split_points, fg_color="gray", hover_color="darkgray")
         self.btn_clear_split.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
 
+        self.btn_split_every_page = ctk.CTkButton(
+            right_frame,
+            text="全体を1ページずつ分割する",
+            command=self.split_every_page,
+            state="disabled"
+        )
+        self.btn_split_every_page.grid(row=3, column=0, sticky="ew", padx=10, pady=5)
+
         lbl_section = ctk.CTkLabel(right_frame, text="分割セクションと出力ファイル名:")
-        lbl_section.grid(row=3, column=0, sticky="w", padx=10, pady=(10, 0))
+        lbl_section.grid(row=4, column=0, sticky="w", padx=10, pady=(10, 0))
 
         # 分割セクションのリスト表示領域
         self.scroll_frame = ctk.CTkScrollableFrame(right_frame)
-        self.scroll_frame.grid(row=4, column=0, sticky="nsew", padx=10, pady=5)
-        right_frame.grid_rowconfigure(4, weight=1)
+        self.scroll_frame.grid(row=5, column=0, sticky="nsew", padx=10, pady=5)
+        right_frame.grid_rowconfigure(5, weight=1)
 
         self.btn_execute = ctk.CTkButton(right_frame, text="分割を実行", command=self.execute_split, 
                                          fg_color="#2ecc71", hover_color="#27ae60", text_color="white",
                                          state="disabled")
-        self.btn_execute.grid(row=5, column=0, sticky="ew", padx=10, pady=10)
+        self.btn_execute.grid(row=6, column=0, sticky="ew", padx=10, pady=10)
 
     def open_pdf(self):
         file_path = filedialog.askopenfilename(title="PDFファイルを選択", filetypes=[("PDF Files", "*.pdf")])
@@ -290,6 +298,9 @@ class App(ctk.CTk):
             self.current_page_idx = page_idx
             self.render_page()
 
+    def on_section_click(self, start_page):
+        self.go_to_page(start_page)
+
     def add_split_point(self):
         if not self.doc: return
         if self.current_page_idx > 0 and self.current_page_idx not in self.split_points:
@@ -300,6 +311,26 @@ class App(ctk.CTk):
 
     def clear_split_points(self):
         self.split_points = []
+        self.update_sections_ui()
+        self.update_ui_state()
+
+    def split_every_page(self):
+        if not self.doc:
+            return
+
+        answer = messagebox.askyesno(
+            "確認",
+            "分割点を1ページごとに一括設定します。現在の分割点は上書きされます。\n実行しますか？"
+        )
+        if not answer:
+            return
+
+        total_pages = len(self.doc)
+        if total_pages <= 1:
+            self.split_points = []
+        else:
+            self.split_points = list(range(1, total_pages))
+
         self.update_sections_ui()
         self.update_ui_state()
 
@@ -332,6 +363,10 @@ class App(ctk.CTk):
             txt_filename = ctk.CTkEntry(item_frame, placeholder_text=f"output_part{i+1}.pdf")
             txt_filename.grid(row=0, column=2, sticky="ew")
 
+            clickable_widgets = [item_frame, marker, lbl_range]
+            for widget in clickable_widgets:
+                widget.bind("<Button-1>", lambda event, s=start: self.on_section_click(s))
+
             self.section_widgets.append({
                 'frame': item_frame,
                 'entry': txt_filename,
@@ -348,6 +383,7 @@ class App(ctk.CTk):
         state_prev = "normal" if self.doc and self.current_page_idx > 0 else "disabled"
         state_next = "normal" if self.doc and self.current_page_idx < (len(self.doc)-1 if self.doc else 0) else "disabled"
         state_add = "normal" if self.doc and self.current_page_idx > 0 else "disabled"
+        state_split_every_page = "normal" if self.doc and len(self.doc) > 1 else "disabled"
         state_exec = "normal" if self.doc else "disabled"
 
         self.btn_prev.configure(state=state_prev)
@@ -355,6 +391,7 @@ class App(ctk.CTk):
         self.btn_next.configure(state=state_next)
         self.btn_next_10.configure(state=state_next)
         self.btn_add_split.configure(state=state_add)
+        self.btn_split_every_page.configure(state=state_split_every_page)
         self.btn_execute.configure(state=state_exec)
 
     def execute_split(self):
