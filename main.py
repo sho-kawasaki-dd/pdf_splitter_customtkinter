@@ -148,6 +148,8 @@ class App(ctk.CTk):
         self.pdf_label.bind("<End>", self.on_preview_end_key)
         self.pdf_label.bind("<Prior>", self.on_preview_pageup_key)
         self.pdf_label.bind("<Next>", self.on_preview_pagedown_key)
+        self.pdf_label.bind("<Return>", self.on_preview_enter_key)
+        self.pdf_label.bind("<KP_Enter>", self.on_preview_enter_key)
 
         # カスタム色分けプログレスバー (tk.CanvasをCTkFrameに配置)
         self.split_bar = CustomSplitBar(left_frame, on_page_click=self.go_to_page)
@@ -173,6 +175,24 @@ class App(ctk.CTk):
         self.btn_next_10 = ctk.CTkButton(nav_frame, text="+10 >>", width=80, command=self.next_10_pages, state="disabled")
         self.btn_next_10.grid(row=0, column=4, padx=5)
 
+        add_split_container = ctk.CTkFrame(left_frame, fg_color="transparent")
+        add_split_container.grid(row=3, column=0, sticky="ew", pady=(10, 10))
+        add_split_container.grid_columnconfigure(0, weight=3)
+        add_split_container.grid_columnconfigure(1, weight=4)
+        add_split_container.grid_columnconfigure(2, weight=3)
+
+        self.btn_add_split = ctk.CTkButton(
+            add_split_container,
+            text="現在のページを分割点の始点にする",
+            command=self.add_split_point,
+            fg_color="#f39c12",
+            hover_color="#d68910",
+            text_color="#111111",
+            text_color_disabled="#666666",
+            state="disabled"
+        )
+        self.btn_add_split.grid(row=0, column=1, sticky="ew")
+
     def init_right_frame(self):
         right_frame = ctk.CTkFrame(self)
         right_frame.grid(row=0, column=1, sticky="nsew", padx=(0, 10), pady=10)
@@ -180,10 +200,6 @@ class App(ctk.CTk):
 
         self.btn_open = ctk.CTkButton(right_frame, text="PDFを開く", command=self.open_pdf)
         self.btn_open.grid(row=0, column=0, sticky="ew", padx=10, pady=10)
-
-        self.btn_add_split = ctk.CTkButton(right_frame, text="現在のページを分割点の始点にする", 
-                                           command=self.add_split_point, state="disabled")
-        self.btn_add_split.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
 
         self.btn_clear_split = ctk.CTkButton(right_frame, text="分割点をリセット", 
                                              command=self.clear_split_points, fg_color="gray", hover_color="darkgray",
@@ -289,6 +305,10 @@ class App(ctk.CTk):
     def on_preview_end_key(self, event):
         if self.doc:
             self.go_to_page(len(self.doc) - 1)
+        return "break"
+
+    def on_preview_enter_key(self, event):
+        self.add_split_point()
         return "break"
 
     def go_to_page(self, page_idx):
