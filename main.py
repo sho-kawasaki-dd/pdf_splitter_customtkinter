@@ -153,6 +153,7 @@ class App(ctk.CTk):
         self.pdf_label.bind("<Control-Next>", self.on_preview_ctrl_pagedown_key)
         self.pdf_label.bind("<Return>", self.on_preview_enter_key)
         self.pdf_label.bind("<KP_Enter>", self.on_preview_enter_key)
+        self.pdf_label.bind("<Delete>", self.on_preview_delete_key)
         self.pdf_label.bind("<Shift-Return>", self.on_shift_enter_execute_key)
         self.pdf_label.bind("<Shift-KP_Enter>", self.on_shift_enter_execute_key)
 
@@ -182,13 +183,12 @@ class App(ctk.CTk):
 
         add_split_container = ctk.CTkFrame(left_frame, fg_color="transparent")
         add_split_container.grid(row=3, column=0, sticky="ew", pady=(10, 10))
-        add_split_container.grid_columnconfigure(0, weight=3)
-        add_split_container.grid_columnconfigure(1, weight=4)
-        add_split_container.grid_columnconfigure(2, weight=3)
+        add_split_container.grid_columnconfigure(0, weight=1)
+        add_split_container.grid_columnconfigure(3, weight=1)
 
         self.btn_add_split = ctk.CTkButton(
             add_split_container,
-            text="現在のページを分割点の始点にする",
+            text="現在のページに分割点を設定する",
             command=self.add_split_point,
             fg_color="#f39c12",
             hover_color="#d68910",
@@ -196,7 +196,17 @@ class App(ctk.CTk):
             text_color_disabled="#666666",
             state="disabled"
         )
-        self.btn_add_split.grid(row=0, column=1, sticky="ew")
+        self.btn_add_split.grid(row=0, column=1, sticky="ew", padx=(0, 5))
+
+        self.btn_remove_split = ctk.CTkButton(
+            add_split_container,
+            text="現在のページの分割点を消去",
+            command=self.remove_split_point,
+            fg_color="gray",
+            hover_color="darkgray",
+            state="disabled"
+        )
+        self.btn_remove_split.grid(row=0, column=2, sticky="ew")
 
     def init_right_frame(self):
         right_frame = ctk.CTkFrame(self)
@@ -322,6 +332,10 @@ class App(ctk.CTk):
         self.add_split_point()
         return "break"
 
+    def on_preview_delete_key(self, event):
+        self.remove_split_point()
+        return "break"
+
     def on_shift_enter_execute_key(self, event):
         if not self.doc or self.btn_execute.cget("state") != "normal":
             return "break"
@@ -345,6 +359,15 @@ class App(ctk.CTk):
         if self.current_page_idx > 0 and self.current_page_idx not in self.split_points:
             self.split_points.append(self.current_page_idx)
             self.split_points.sort()
+            self.update_sections_ui()
+            self.update_ui_state()
+
+    def remove_split_point(self):
+        if not self.doc:
+            return
+
+        if self.current_page_idx in self.split_points:
+            self.split_points.remove(self.current_page_idx)
             self.update_sections_ui()
             self.update_ui_state()
 
@@ -428,7 +451,8 @@ class App(ctk.CTk):
         
         state_prev = "normal" if self.doc and self.current_page_idx > 0 else "disabled"
         state_next = "normal" if self.doc and self.current_page_idx < (len(self.doc)-1 if self.doc else 0) else "disabled"
-        state_add = "normal" if self.doc and self.current_page_idx > 0 else "disabled"
+        state_add = "normal" if self.doc and self.current_page_idx > 0 and self.current_page_idx not in self.split_points else "disabled"
+        state_remove = "normal" if self.doc and self.current_page_idx in self.split_points else "disabled"
         state_clear_split = "normal" if self.doc else "disabled"
         state_split_every_page = "normal" if self.doc and len(self.doc) > 1 else "disabled"
         state_exec = "normal" if self.doc else "disabled"
@@ -438,6 +462,7 @@ class App(ctk.CTk):
         self.btn_next.configure(state=state_next)
         self.btn_next_10.configure(state=state_next)
         self.btn_add_split.configure(state=state_add)
+        self.btn_remove_split.configure(state=state_remove)
         self.btn_clear_split.configure(state=state_clear_split)
         self.btn_split_every_page.configure(state=state_split_every_page)
         self.btn_execute.configure(state=state_exec)
