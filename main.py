@@ -186,7 +186,8 @@ class App(ctk.CTk):
         self.btn_add_split.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
 
         self.btn_clear_split = ctk.CTkButton(right_frame, text="分割点をリセット", 
-                                             command=self.clear_split_points, fg_color="gray", hover_color="darkgray")
+                                             command=self.clear_split_points, fg_color="gray", hover_color="darkgray",
+                                             state="disabled")
         self.btn_clear_split.grid(row=2, column=0, sticky="ew", padx=10, pady=5)
 
         self.btn_split_every_page = ctk.CTkButton(
@@ -310,6 +311,13 @@ class App(ctk.CTk):
             self.update_ui_state()
 
     def clear_split_points(self):
+        answer = messagebox.askyesno(
+            "確認",
+            "現在の分割点をすべてリセットします。\n実行しますか？"
+        )
+        if not answer:
+            return
+
         self.split_points = []
         self.update_sections_ui()
         self.update_ui_state()
@@ -383,6 +391,7 @@ class App(ctk.CTk):
         state_prev = "normal" if self.doc and self.current_page_idx > 0 else "disabled"
         state_next = "normal" if self.doc and self.current_page_idx < (len(self.doc)-1 if self.doc else 0) else "disabled"
         state_add = "normal" if self.doc and self.current_page_idx > 0 else "disabled"
+        state_clear_split = "normal" if self.doc else "disabled"
         state_split_every_page = "normal" if self.doc and len(self.doc) > 1 else "disabled"
         state_exec = "normal" if self.doc else "disabled"
 
@@ -391,6 +400,7 @@ class App(ctk.CTk):
         self.btn_next.configure(state=state_next)
         self.btn_next_10.configure(state=state_next)
         self.btn_add_split.configure(state=state_add)
+        self.btn_clear_split.configure(state=state_clear_split)
         self.btn_split_every_page.configure(state=state_split_every_page)
         self.btn_execute.configure(state=state_exec)
 
