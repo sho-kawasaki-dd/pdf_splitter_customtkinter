@@ -184,12 +184,15 @@ class App(ctk.CTk):
         add_split_container = ctk.CTkFrame(left_frame, fg_color="transparent")
         add_split_container.grid(row=3, column=0, sticky="ew", pady=(10, 10))
         add_split_container.grid_columnconfigure(0, weight=1)
+        add_split_container.grid_columnconfigure(1, weight=1, uniform="split_action", minsize=260)
+        add_split_container.grid_columnconfigure(2, weight=1, uniform="split_action", minsize=260)
         add_split_container.grid_columnconfigure(3, weight=1)
 
         self.btn_add_split = ctk.CTkButton(
             add_split_container,
             text="現在のページに分割点を設定する",
             command=self.add_split_point,
+            width=280,
             fg_color="#f39c12",
             hover_color="#d68910",
             text_color="#111111",
@@ -202,6 +205,7 @@ class App(ctk.CTk):
             add_split_container,
             text="現在のページの分割点を消去",
             command=self.remove_split_point,
+            width=280,
             fg_color="gray",
             hover_color="darkgray",
             state="disabled"
