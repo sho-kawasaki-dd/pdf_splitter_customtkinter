@@ -132,6 +132,9 @@ class App(ctk.CTk):
         self.init_left_frame()
         self.init_right_frame()
 
+        self.bind_all("<Shift-Return>", self.on_shift_enter_execute_key)
+        self.bind_all("<Shift-KP_Enter>", self.on_shift_enter_execute_key)
+
     def init_left_frame(self):
         left_frame = ctk.CTkFrame(self)
         left_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
@@ -150,6 +153,8 @@ class App(ctk.CTk):
         self.pdf_label.bind("<Next>", self.on_preview_pagedown_key)
         self.pdf_label.bind("<Return>", self.on_preview_enter_key)
         self.pdf_label.bind("<KP_Enter>", self.on_preview_enter_key)
+        self.pdf_label.bind("<Shift-Return>", self.on_shift_enter_execute_key)
+        self.pdf_label.bind("<Shift-KP_Enter>", self.on_shift_enter_execute_key)
 
         # カスタム色分けプログレスバー (tk.CanvasをCTkFrameに配置)
         self.split_bar = CustomSplitBar(left_frame, on_page_click=self.go_to_page)
@@ -308,7 +313,17 @@ class App(ctk.CTk):
         return "break"
 
     def on_preview_enter_key(self, event):
+        if event.state & 0x0001:
+            return self.on_shift_enter_execute_key(event)
+
         self.add_split_point()
+        return "break"
+
+    def on_shift_enter_execute_key(self, event):
+        if not self.doc or self.btn_execute.cget("state") != "normal":
+            return "break"
+
+        self.execute_split()
         return "break"
 
     def go_to_page(self, page_idx):
