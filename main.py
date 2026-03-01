@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 import customtkinter as ctk
 import fitz  # PyMuPDF
-from PIL import Image
+from PIL import Image, ImageTk
 
 # CustomTkinterの全体設定
 ctk.set_appearance_mode("System")
@@ -124,6 +124,12 @@ class App(ctk.CTk):
         self.current_page_idx = 0
         self.split_points = []
         self.section_widgets = [] # スクロールフレーム内のウィジェット管理用
+        self.preview_zoom = 1.0
+        self.preview_zoom_min = 0.5
+        self.preview_zoom_max = 3.0
+        self.preview_zoom_step = 0.1
+        self.preview_image_tk = None
+        self.preview_can_pan = False
 
         self.grid_columnconfigure(0, weight=7)
         self.grid_columnconfigure(1, weight=3)
@@ -142,20 +148,39 @@ class App(ctk.CTk):
         left_frame.grid_columnconfigure(0, weight=1)
 
         # PDFプレビュー領域
-        self.pdf_label = ctk.CTkLabel(left_frame, text="PDFを開いてください", takefocus=True)
-        self.pdf_label.grid(row=0, column=0, sticky="nsew", pady=(0, 10))
-        self.pdf_label.bind("<Button-1>", lambda event: self.pdf_label.focus_set())
-        self.pdf_label.bind("<Home>", self.on_preview_home_key)
-        self.pdf_label.bind("<End>", self.on_preview_end_key)
-        self.pdf_label.bind("<Prior>", self.on_preview_pageup_key)
-        self.pdf_label.bind("<Next>", self.on_preview_pagedown_key)
-        self.pdf_label.bind("<Control-Prior>", self.on_preview_ctrl_pageup_key)
-        self.pdf_label.bind("<Control-Next>", self.on_preview_ctrl_pagedown_key)
-        self.pdf_label.bind("<Return>", self.on_preview_enter_key)
-        self.pdf_label.bind("<KP_Enter>", self.on_preview_enter_key)
-        self.pdf_label.bind("<Delete>", self.on_preview_delete_key)
-        self.pdf_label.bind("<Shift-Return>", self.on_shift_enter_execute_key)
-        self.pdf_label.bind("<Shift-KP_Enter>", self.on_shift_enter_execute_key)
+        preview_frame = ctk.CTkFrame(left_frame)
+        preview_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 10))
+        preview_frame.grid_rowconfigure(0, weight=1)
+        preview_frame.grid_columnconfigure(0, weight=1)
+
+        self.preview_canvas = tk.Canvas(preview_frame, highlightthickness=0, takefocus=1)
+        self.preview_canvas.grid(row=0, column=0, sticky="nsew")
+        self.preview_canvas.bind("<Button-1>", self.on_preview_mouse_down)
+        self.preview_canvas.bind("<B1-Motion>", self.on_preview_mouse_drag)
+        self.preview_canvas.bind("<ButtonRelease-1>", self.on_preview_mouse_up)
+        self.preview_canvas.bind("<Enter>", self.on_preview_mouse_enter)
+        self.preview_canvas.bind("<Leave>", self.on_preview_mouse_leave)
+        self.preview_canvas.bind("<Home>", self.on_preview_home_key)
+        self.preview_canvas.bind("<End>", self.on_preview_end_key)
+        self.preview_canvas.bind("<Prior>", self.on_preview_pageup_key)
+        self.preview_canvas.bind("<Next>", self.on_preview_pagedown_key)
+        self.preview_canvas.bind("<Control-Prior>", self.on_preview_ctrl_pageup_key)
+        self.preview_canvas.bind("<Control-Next>", self.on_preview_ctrl_pagedown_key)
+        self.preview_canvas.bind("<Return>", self.on_preview_enter_key)
+        self.preview_canvas.bind("<KP_Enter>", self.on_preview_enter_key)
+        self.preview_canvas.bind("<Delete>", self.on_preview_delete_key)
+        self.preview_canvas.bind("<Shift-Return>", self.on_shift_enter_execute_key)
+        self.preview_canvas.bind("<Shift-KP_Enter>", self.on_shift_enter_execute_key)
+        self.preview_canvas.bind("<z>", self.on_preview_zoom_in_key)
+        self.preview_canvas.bind("<Z>", self.on_preview_zoom_out_key)
+        self.preview_canvas.bind("<d>", self.on_preview_zoom_reset_key)
+
+        self.preview_message = self.preview_canvas.create_text(
+            250, 300,
+            text="PDFを開いてください",
+            fill="#808080",
+            font=("Segoe UI", 16)
+        )
 
         # カスタム色分けプログレスバー (tk.CanvasをCTkFrameに配置)
         self.split_bar = CustomSplitBar(left_frame, on_page_click=self.go_to_page)
@@ -212,6 +237,9 @@ class App(ctk.CTk):
         )
         self.btn_remove_split.grid(row=0, column=2, sticky="ew")
 
+        self.lbl_zoom_info = ctk.CTkLabel(add_split_container, text="倍率: 100%", anchor="w")
+        self.lbl_zoom_info.grid(row=0, column=0, sticky="w", padx=(5, 10))
+
     def init_right_frame(self):
         right_frame = ctk.CTkFrame(self)
         right_frame.grid(row=0, column=1, sticky="nsew", padx=(0, 10), pady=10)
@@ -256,6 +284,7 @@ class App(ctk.CTk):
             self.doc = fitz.open(file_path)
             self.current_page_idx = 0
             self.split_points = []
+            self.preview_zoom = 1.0
             self.render_page()
             self.update_sections_ui()
 
@@ -263,26 +292,104 @@ class App(ctk.CTk):
         if not self.doc: return
 
         page = self.doc.load_page(self.current_page_idx)
-        # 画像化 (解像度調整)
-        pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5))
+        # 画像化 (ベース解像度で描画し、表示サイズ側でズームを反映)
+        base_render_scale = 1.5
+        pix = page.get_pixmap(matrix=fitz.Matrix(base_render_scale, base_render_scale))
         mode = "RGBA" if pix.alpha else "RGB"
         img = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
 
         # 表示領域に合わせて画像をリサイズしつつアスペクト比を維持
-        frame_width = self.pdf_label.winfo_width()
-        frame_height = self.pdf_label.winfo_height()
+        frame_width = self.preview_canvas.winfo_width()
+        frame_height = self.preview_canvas.winfo_height()
         
         # 初回レンダリング時などサイズが取得できない場合のフォールバック
         if frame_width <= 1 or frame_height <= 1:
             frame_width, frame_height = 500, 600
 
-        img.thumbnail((frame_width, frame_height), Image.Resampling.LANCZOS)
-        
-        # CTkImageに変換して表示
-        ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(img.width, img.height))
-        self.pdf_label.configure(image=ctk_img, text="")
+        fit_ratio = min(frame_width / img.width, frame_height / img.height)
+        zoomed_ratio = fit_ratio * self.preview_zoom
+        target_width = max(1, int(img.width * zoomed_ratio))
+        target_height = max(1, int(img.height * zoomed_ratio))
+        if target_width != img.width or target_height != img.height:
+            img = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
+
+        self.preview_image_tk = ImageTk.PhotoImage(img)
+        self.preview_canvas.delete("all")
+
+        image_x = max((frame_width - target_width) // 2, 0)
+        image_y = max((frame_height - target_height) // 2, 0)
+        self.preview_canvas.create_image(image_x, image_y, anchor="nw", image=self.preview_image_tk)
+
+        scroll_width = max(frame_width, target_width)
+        scroll_height = max(frame_height, target_height)
+        self.preview_canvas.configure(scrollregion=(0, 0, scroll_width, scroll_height))
+        self.preview_canvas.xview_moveto(0)
+        self.preview_canvas.yview_moveto(0)
+        self.preview_can_pan = target_width > frame_width or target_height > frame_height
+        self.update_preview_cursor()
+        self.lbl_zoom_info.configure(text=f"倍率: {int(self.preview_zoom * 100)}%")
         
         self.update_ui_state()
+
+    def set_preview_zoom(self, value):
+        if not self.doc:
+            return
+
+        clamped_zoom = max(self.preview_zoom_min, min(self.preview_zoom_max, value))
+        snapped_zoom = round(clamped_zoom, 2)
+        if snapped_zoom == self.preview_zoom:
+            return
+
+        self.preview_zoom = snapped_zoom
+        self.render_page()
+
+    def zoom_in(self):
+        self.set_preview_zoom(self.preview_zoom + self.preview_zoom_step)
+
+    def zoom_out(self):
+        self.set_preview_zoom(self.preview_zoom - self.preview_zoom_step)
+
+    def reset_zoom(self):
+        self.set_preview_zoom(1.0)
+
+    def on_preview_zoom_in_key(self, event):
+        self.zoom_in()
+        return "break"
+
+    def on_preview_zoom_out_key(self, event):
+        self.zoom_out()
+        return "break"
+
+    def on_preview_zoom_reset_key(self, event):
+        self.reset_zoom()
+        return "break"
+
+    def on_preview_mouse_down(self, event):
+        self.preview_canvas.focus_set()
+        if self.preview_can_pan:
+            self.preview_canvas.scan_mark(event.x, event.y)
+            self.preview_canvas.configure(cursor="fleur")
+
+    def on_preview_mouse_drag(self, event):
+        if not self.doc:
+            return "break"
+
+        if self.preview_can_pan:
+            self.preview_canvas.scan_dragto(event.x, event.y, gain=1)
+        return "break"
+
+    def on_preview_mouse_up(self, event):
+        self.update_preview_cursor()
+
+    def on_preview_mouse_enter(self, event):
+        self.update_preview_cursor()
+
+    def on_preview_mouse_leave(self, event):
+        self.preview_canvas.configure(cursor="")
+
+    def update_preview_cursor(self):
+        cursor = "hand2" if self.preview_can_pan else ""
+        self.preview_canvas.configure(cursor=cursor)
 
     def prev_page(self):
         if self.doc and self.current_page_idx > 0:
@@ -452,6 +559,9 @@ class App(ctk.CTk):
             total = len(self.doc)
             self.lbl_page_info.configure(text=f"{self.current_page_idx + 1} / {total}")
             self.split_bar.update_state(total, self.current_page_idx, self.split_points)
+            self.lbl_zoom_info.configure(text=f"倍率: {int(self.preview_zoom * 100)}%")
+        else:
+            self.lbl_zoom_info.configure(text="倍率: 100%")
         
         state_prev = "normal" if self.doc and self.current_page_idx > 0 else "disabled"
         state_next = "normal" if self.doc and self.current_page_idx < (len(self.doc)-1 if self.doc else 0) else "disabled"
