@@ -3,6 +3,8 @@ from tkinter import filedialog, messagebox
 from pathlib import Path
 import threading
 import re
+import queue
+from collections import OrderedDict
 import customtkinter as ctk
 import fitz  # PyMuPDF
 from PIL import Image, ImageTk
@@ -137,6 +139,7 @@ class App(ctk.CTk):
         super().__init__()
         self.title("PDF 分割アプリケーション (CustomTkinter)")
         self.geometry("1000x700")
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         self.doc = None
         self.current_page_idx = 0
@@ -147,9 +150,13 @@ class App(ctk.CTk):
         self.preview_zoom_max = 3.0
         self.preview_zoom_step = 0.1
         self.preview_image_tk = None
+        self.preview_render_cache = OrderedDict()
+        self.preview_render_cache_limit = 10
         self.preview_can_pan = False
         self.is_splitting = False
         self.source_pdf_path = None
+        self.split_result_queue = queue.Queue()
+        self.split_queue_poll_job = None
 
         self.grid_columnconfigure(0, weight=7)
         self.grid_columnconfigure(1, weight=3)
@@ -373,8 +380,24 @@ class App(ctk.CTk):
             self.split_points = []
             self.sections_data = []
             self.preview_zoom = 1.0
+            self.preview_render_cache.clear()
             self._rebuild_sections_data()
             self.render_page()
+
+    def on_closing(self):
+        if self.split_queue_poll_job is not None:
+            try:
+                self.after_cancel(self.split_queue_poll_job)
+            except Exception:
+                pass
+            self.split_queue_poll_job = None
+
+        if self.doc:
+            self.doc.close()
+            self.doc = None
+
+        self.preview_render_cache.clear()
+        self.destroy()
 
     # ------------------------------------------------------------------
     # データモデル管理
@@ -431,20 +454,39 @@ class App(ctk.CTk):
             return
 
         text = self.txt_section_filename.get().strip()
-        text = re.sub(r'[\\/*?:"<>|]', '_', text)
         sec = self.sections_data[idx]
         default_name = f"output_part{idx + 1}.pdf"
+        reserved_names = {
+            "con", "prn", "aux", "nul",
+            "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
+            "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+        }
 
-        if text and text != default_name:
-            sec['filename'] = text
-            sec['is_custom_name'] = True
-        elif not text:
+        sanitized = re.sub(r'[\\/*?:"<>|]', '_', text)
+        sanitized = re.sub(r'\s+', ' ', sanitized).strip()
+        if sanitized.lower().endswith('.pdf'):
+            sanitized = sanitized[:-4]
+        sanitized = sanitized.strip(' ._')
+        sanitized = re.sub(r'_+', '_', sanitized)
+
+        is_invalid = (
+            not sanitized
+            or sanitized.lower() in reserved_names
+            or re.fullmatch(r'_+', sanitized) is not None
+        )
+
+        if is_invalid:
+            sec['filename'] = default_name
+            sec['is_custom_name'] = False
+            return
+
+        candidate = f"{sanitized}.pdf"
+        if candidate == default_name:
             sec['filename'] = default_name
             sec['is_custom_name'] = False
         else:
-            # テキストがデフォルト名と一致 ― カスタムフラグを落とす
-            sec['filename'] = default_name
-            sec['is_custom_name'] = False
+            sec['filename'] = candidate
+            sec['is_custom_name'] = True
 
     def _update_active_section_ui(self):
         """アクティブセクション表示を更新する。"""
@@ -484,15 +526,30 @@ class App(ctk.CTk):
         if frame_width <= 1 or frame_height <= 1:
             frame_width, frame_height = 500, 600
 
-        fit_ratio = min(frame_width / page_rect.width, frame_height / page_rect.height)
-        final_scale = max(0.01, fit_ratio * self.preview_zoom)
-        pix = page.get_pixmap(matrix=fitz.Matrix(final_scale, final_scale))
-        mode = "RGBA" if pix.alpha else "RGB"
-        img = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
-        target_width = img.width
-        target_height = img.height
+        cache_key = (self.current_page_idx, round(self.preview_zoom, 2), frame_width, frame_height)
+        cached_image = self.preview_render_cache.get(cache_key)
+        if cached_image is not None:
+            self.preview_render_cache.move_to_end(cache_key)
+            self.preview_image_tk = cached_image
+            target_width = cached_image.width()
+            target_height = cached_image.height()
+        else:
+            fit_ratio = min(frame_width / page_rect.width, frame_height / page_rect.height)
+            final_scale = max(0.01, fit_ratio * self.preview_zoom)
+            pix = page.get_pixmap(matrix=fitz.Matrix(final_scale, final_scale))
+            mode = "RGBA" if pix.alpha else "RGB"
+            img = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
+            target_width = img.width
+            target_height = img.height
 
-        self.preview_image_tk = ImageTk.PhotoImage(img)
+            self.preview_image_tk = ImageTk.PhotoImage(img)
+            self.preview_render_cache[cache_key] = self.preview_image_tk
+            self.preview_render_cache.move_to_end(cache_key)
+
+            while len(self.preview_render_cache) > self.preview_render_cache_limit:
+                _, old_image = self.preview_render_cache.popitem(last=False)
+                del old_image
+
         self.preview_canvas.delete("all")
 
         image_x = max((frame_width - target_width) // 2, 0)
@@ -831,6 +888,7 @@ class App(ctk.CTk):
         self.btn_prev_section.configure(state=state_prev_sec)
         self.btn_next_section.configure(state=state_next_sec)
         self.btn_remove_active_section_split.configure(state=state_remove_active_section_split)
+        self.txt_section_filename.configure(state="normal" if self.doc and not self.is_splitting else "disabled")
 
         # アクティブセクション表示を更新
         self._update_active_section_ui()
@@ -883,6 +941,24 @@ class App(ctk.CTk):
         self._set_split_running(False)
         messagebox.showerror("保存エラー", error_message)
 
+    def _poll_split_result_queue(self):
+        while True:
+            try:
+                result = self.split_result_queue.get_nowait()
+            except queue.Empty:
+                break
+
+            result_type = result.get('type')
+            if result_type == 'success':
+                self._on_split_success(result.get('file_count', 0))
+            elif result_type == 'error':
+                self._on_split_error(result.get('message', '不明なエラーが発生しました。'))
+
+        if self.is_splitting:
+            self.split_queue_poll_job = self.after(100, self._poll_split_result_queue)
+        else:
+            self.split_queue_poll_job = None
+
     def _split_worker(self, source_pdf_path, out_dir, jobs):
         output_dir = Path(out_dir)
         current_job_desc = "(初期化中)"
@@ -895,20 +971,29 @@ class App(ctk.CTk):
 
                     with fitz.open() as new_doc:
                         new_doc.insert_pdf(source_doc, from_page=job['start'], to_page=job['end'])
-                        new_doc.save(str(out_path))
+                        try:
+                            new_doc.save(str(out_path))
+                        except PermissionError as e:
+                            self.split_result_queue.put({
+                                'type': 'error',
+                                'message': (
+                                    "保存先ファイルが他のアプリで使用中のため保存できませんでした。\n"
+                                    f"対象ファイル: {out_path}\n"
+                                    f"詳細: {e}"
+                                ),
+                            })
+                            return
 
         except Exception as e:
             desc = current_job_desc
             err = str(e)
-            self.after(
-                0,
-                lambda d=desc, e_str=err: self._on_split_error(
-                    f"{d}の保存中にエラーが発生しました:\n{e_str}"
-                ),
-            )
+            self.split_result_queue.put({
+                'type': 'error',
+                'message': f"{desc}の保存中にエラーが発生しました:\n{err}",
+            })
             return
 
-        self.after(0, lambda: self._on_split_success(len(jobs)))
+        self.split_result_queue.put({'type': 'success', 'file_count': len(jobs)})
 
     def execute_split(self):
         if not self.doc or self.is_splitting:
@@ -930,7 +1015,15 @@ class App(ctk.CTk):
             messagebox.showerror("エラー", "分割対象のセクションがありません。")
             return
 
+        while True:
+            try:
+                self.split_result_queue.get_nowait()
+            except queue.Empty:
+                break
+
         self._set_split_running(True)
+        if self.split_queue_poll_job is None:
+            self.split_queue_poll_job = self.after(100, self._poll_split_result_queue)
 
         worker = threading.Thread(
             target=self._split_worker,
