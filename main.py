@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from pathlib import Path
 import threading
+import re
 import customtkinter as ctk
 import fitz  # PyMuPDF
 from PIL import Image, ImageTk
@@ -27,6 +28,7 @@ class CustomSplitBar(tk.Canvas):
         self.total_pages = 0
         self.current_page = 0
         self.split_points = []
+        self.active_section_index = -1  # アクティブセクションのハイライト用
         self.on_page_click = on_page_click
         
         self.colors = ["#3498db", "#e74c3c", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c"]
@@ -67,10 +69,11 @@ class CustomSplitBar(tk.Canvas):
         if self.on_page_click:
             self.on_page_click(target_page)
 
-    def update_state(self, total, current, splits):
+    def update_state(self, total, current, splits, active_section_index=-1):
         self.total_pages = total
         self.current_page = current
         self.split_points = sorted(splits)
+        self.active_section_index = active_section_index
         self.draw()
 
     def draw(self):
@@ -106,7 +109,20 @@ class CustomSplitBar(tk.Canvas):
             x_pos = point * page_width
             self.create_line(x_pos, 0, x_pos, height, fill="black", width=2)
 
-        # --- 3. 現在位置のインジケーター（逆三角形） ---
+        # --- 3. アクティブセクションの白枠ハイライト ---
+        if self.active_section_index >= 0:
+            boundaries = [0] + self.split_points + [self.total_pages]
+            if self.active_section_index < len(boundaries) - 1:
+                sec_start = boundaries[self.active_section_index]
+                sec_end = boundaries[self.active_section_index + 1]
+                x_start = sec_start * page_width
+                x_end = sec_end * page_width
+                self.create_rectangle(
+                    x_start + 1, 1, x_end - 1, height - 1,
+                    fill="", outline="white", width=2
+                )
+
+        # --- 4. 現在位置のインジケーター（逆三角形） ---
         current_x = (self.current_page + 0.5) * page_width
         self.create_polygon(
             current_x - 6, 0,
@@ -125,7 +141,7 @@ class App(ctk.CTk):
         self.doc = None
         self.current_page_idx = 0
         self.split_points = []
-        self.section_widgets = [] # スクロールフレーム内のウィジェット管理用
+        self.sections_data = []  # データモデル: [{'start', 'end', 'filename', 'is_custom_name'}, ...]
         self.preview_zoom = 1.0
         self.preview_zoom_min = 0.5
         self.preview_zoom_max = 3.0
@@ -144,6 +160,10 @@ class App(ctk.CTk):
 
         self.bind_all("<Shift-Return>", self.on_shift_enter_execute_key)
         self.bind_all("<Shift-KP_Enter>", self.on_shift_enter_execute_key)
+        self.bind_all("<Control-Up>", self.on_ctrl_up_section_key)
+        self.bind_all("<Control-Down>", self.on_ctrl_down_section_key)
+        self.bind_all("<Control-KP_Up>", self.on_ctrl_up_section_key)
+        self.bind_all("<Control-KP_Down>", self.on_ctrl_down_section_key)
 
     def init_left_frame(self):
         left_frame = ctk.CTkFrame(self)
@@ -269,13 +289,69 @@ class App(ctk.CTk):
         )
         self.btn_split_every_page.grid(row=3, column=0, sticky="ew", padx=10, pady=5)
 
-        lbl_section = ctk.CTkLabel(right_frame, text="分割セクションと出力ファイル名:")
-        lbl_section.grid(row=4, column=0, sticky="w", padx=10, pady=(10, 0))
+        # --- アクティブセクション表示エリア ---
+        section_area = ctk.CTkFrame(right_frame)
+        section_area.grid(row=4, column=0, sticky="nsew", padx=10, pady=(10, 5))
+        section_area.grid_columnconfigure(0, weight=1)
+        right_frame.grid_rowconfigure(4, weight=1)
 
-        # 分割セクションのリスト表示領域
-        self.scroll_frame = ctk.CTkScrollableFrame(right_frame)
-        self.scroll_frame.grid(row=5, column=0, sticky="nsew", padx=10, pady=5)
-        right_frame.grid_rowconfigure(5, weight=1)
+        lbl_section_title = ctk.CTkLabel(section_area, text="現在のセクション:", anchor="w")
+        lbl_section_title.grid(row=0, column=0, sticky="w", padx=5, pady=(5, 0))
+
+        # セクション番号 / 総セクション数 + ページ範囲 + 色マーカー
+        section_info_frame = ctk.CTkFrame(section_area, fg_color="transparent")
+        section_info_frame.grid(row=1, column=0, sticky="ew", padx=5, pady=5)
+        section_info_frame.grid_columnconfigure(1, weight=1)
+
+        self.section_color_marker = tk.Canvas(section_info_frame, width=20, height=20, highlightthickness=0)
+        self.section_color_marker.grid(row=0, column=0, padx=(0, 8))
+
+        self.lbl_section_info = ctk.CTkLabel(section_info_frame, text="- / -", anchor="w", font=ctk.CTkFont(size=14))
+        self.lbl_section_info.grid(row=0, column=1, sticky="w")
+
+        self.lbl_section_range = ctk.CTkLabel(section_area, text="ページ範囲: -", anchor="w")
+        self.lbl_section_range.grid(row=2, column=0, sticky="w", padx=5, pady=(0, 5))
+
+        # ファイル名入力
+        lbl_filename = ctk.CTkLabel(section_area, text="出力ファイル名:", anchor="w")
+        lbl_filename.grid(row=3, column=0, sticky="w", padx=5)
+
+        self.txt_section_filename = ctk.CTkEntry(section_area, placeholder_text="ファイル名を入力")
+        self.txt_section_filename.grid(row=4, column=0, sticky="ew", padx=5, pady=(0, 5))
+        self.txt_section_filename.bind("<Tab>", self._on_section_entry_tab)
+        self.txt_section_filename.bind("<Return>", self._on_section_entry_return)
+        self.txt_section_filename.bind("<KP_Enter>", self._on_section_entry_return)
+        self.txt_section_filename.bind("<Delete>", self._on_section_entry_delete)
+        self.txt_section_filename.bind("<Shift-Return>", self.on_shift_enter_execute_key)
+        self.txt_section_filename.bind("<Shift-KP_Enter>", self.on_shift_enter_execute_key)
+        self.txt_section_filename.bind("<FocusOut>", self._on_section_entry_focus_out)
+
+        # セクション間ナビゲーションボタン
+        section_nav_frame = ctk.CTkFrame(section_area, fg_color="transparent")
+        section_nav_frame.grid(row=5, column=0, sticky="ew", padx=5, pady=5)
+        section_nav_frame.grid_columnconfigure((0, 1), weight=1)
+
+        self.btn_prev_section = ctk.CTkButton(
+            section_nav_frame, text="< 前のセクション",
+            command=self.prev_section, state="disabled"
+        )
+        self.btn_prev_section.grid(row=0, column=0, sticky="ew", padx=(0, 3))
+
+        self.btn_next_section = ctk.CTkButton(
+            section_nav_frame, text="次のセクション >",
+            command=self.next_section, state="disabled"
+        )
+        self.btn_next_section.grid(row=0, column=1, sticky="ew", padx=(3, 0))
+
+        self.btn_remove_active_section_split = ctk.CTkButton(
+            section_area,
+            text="このセクションの開始分割点を消去",
+            command=self.remove_active_section_split_point,
+            fg_color="gray",
+            hover_color="darkgray",
+            state="disabled"
+        )
+        self.btn_remove_active_section_split.grid(row=6, column=0, sticky="ew", padx=5, pady=(12, 5))
 
         self.btn_execute = ctk.CTkButton(right_frame, text="分割を実行", command=self.execute_split, 
                                          fg_color="#2ecc71", hover_color="#27ae60", text_color="white",
@@ -295,9 +371,105 @@ class App(ctk.CTk):
             self.source_pdf_path = file_path
             self.current_page_idx = 0
             self.split_points = []
+            self.sections_data = []
             self.preview_zoom = 1.0
+            self._rebuild_sections_data()
             self.render_page()
-            self.update_sections_ui()
+
+    # ------------------------------------------------------------------
+    # データモデル管理
+    # ------------------------------------------------------------------
+
+    def _rebuild_sections_data(self):
+        """分割点から sections_data を再構築する。
+        開始ページをキーにして、ユーザーが手入力したカスタムファイル名を引き継ぐ。
+        """
+        if not self.doc:
+            self.sections_data = []
+            return
+
+        # 旧データを開始ページで索引化 (カスタム名の引き継ぎ用)
+        old_by_start = {}
+        for sec in self.sections_data:
+            old_by_start[sec['start']] = sec
+
+        points = [0] + sorted(self.split_points) + [len(self.doc)]
+        new_data = []
+        for i in range(len(points) - 1):
+            start = points[i]
+            end = points[i + 1] - 1
+            default_name = f"output_part{i + 1}.pdf"
+
+            old = old_by_start.get(start)
+            if old and old.get('is_custom_name'):
+                filename = old['filename']
+                is_custom = True
+            else:
+                filename = default_name
+                is_custom = False
+
+            new_data.append({
+                'start': start,
+                'end': end,
+                'filename': filename,
+                'is_custom_name': is_custom,
+            })
+
+        self.sections_data = new_data
+
+    def _get_active_section_index(self):
+        """現在表示中のページが属するセクションのインデックスを返す。"""
+        for i, sec in enumerate(self.sections_data):
+            if sec['start'] <= self.current_page_idx <= sec['end']:
+                return i
+        return 0 if self.sections_data else -1
+
+    def _save_active_section_filename(self):
+        """UIのテキストボックスの内容をデータモデルに反映する。"""
+        idx = self._get_active_section_index()
+        if idx < 0 or idx >= len(self.sections_data):
+            return
+
+        text = self.txt_section_filename.get().strip()
+        text = re.sub(r'[\\/*?:"<>|]', '_', text)
+        sec = self.sections_data[idx]
+        default_name = f"output_part{idx + 1}.pdf"
+
+        if text and text != default_name:
+            sec['filename'] = text
+            sec['is_custom_name'] = True
+        elif not text:
+            sec['filename'] = default_name
+            sec['is_custom_name'] = False
+        else:
+            # テキストがデフォルト名と一致 ― カスタムフラグを落とす
+            sec['filename'] = default_name
+            sec['is_custom_name'] = False
+
+    def _update_active_section_ui(self):
+        """アクティブセクション表示を更新する。"""
+        idx = self._get_active_section_index()
+        total = len(self.sections_data)
+
+        if idx < 0 or total == 0:
+            self.lbl_section_info.configure(text="- / -")
+            self.lbl_section_range.configure(text="ページ範囲: -")
+            self.txt_section_filename.delete(0, "end")
+            self.section_color_marker.configure(bg="gray")
+            return
+
+        sec = self.sections_data[idx]
+        color = self.split_bar.colors[idx % len(self.split_bar.colors)]
+
+        self.lbl_section_info.configure(text=f"セクション {idx + 1} / {total}")
+        self.lbl_section_range.configure(text=f"ページ範囲: P.{sec['start'] + 1} - P.{sec['end'] + 1}")
+        self.section_color_marker.configure(bg=color)
+
+        # テキストボックスの内容を更新 (フォーカスがある場合はユーザー入力を尊重)
+        current_text = self.txt_section_filename.get()
+        if current_text != sec['filename']:
+            self.txt_section_filename.delete(0, "end")
+            self.txt_section_filename.insert(0, sec['filename'])
 
     def render_page(self):
         if not self.doc: return
@@ -444,6 +616,14 @@ class App(ctk.CTk):
         self.next_10_pages()
         return "break"
 
+    def on_ctrl_up_section_key(self, event):
+        self.prev_section()
+        return "break"
+
+    def on_ctrl_down_section_key(self, event):
+        self.next_section()
+        return "break"
+
     def on_preview_home_key(self, event):
         self.go_to_page(0)
         return "break"
@@ -476,18 +656,81 @@ class App(ctk.CTk):
             return
 
         if 0 <= page_idx < len(self.doc) and page_idx != self.current_page_idx:
+            self._save_active_section_filename()
             self.current_page_idx = page_idx
             self.render_page()
 
-    def on_section_click(self, start_page):
-        self.go_to_page(start_page)
+    # ------------------------------------------------------------------
+    # セクション間ナビゲーション
+    # ------------------------------------------------------------------
+
+    def prev_section(self):
+        idx = self._get_active_section_index()
+        if idx > 0:
+            self._save_active_section_filename()
+            self.current_page_idx = self.sections_data[idx - 1]['start']
+            self.render_page()
+
+    def next_section(self):
+        idx = self._get_active_section_index()
+        if idx < len(self.sections_data) - 1:
+            self._save_active_section_filename()
+            self.current_page_idx = self.sections_data[idx + 1]['start']
+            self.render_page()
+
+    def remove_active_section_split_point(self):
+        idx = self._get_active_section_index()
+        if idx <= 0 or idx >= len(self.sections_data):
+            return
+
+        split_point = self.sections_data[idx]['start']
+        if split_point in self.split_points:
+            self._save_active_section_filename()
+            self.split_points.remove(split_point)
+            self._rebuild_sections_data()
+            self.update_ui_state()
+
+    def _on_section_entry_tab(self, event):
+        """Tab押下: 保存 → 次セクションへ → テキスト全選択"""
+        self._save_active_section_filename()
+        idx = self._get_active_section_index()
+        if idx < len(self.sections_data) - 1:
+            self.current_page_idx = self.sections_data[idx + 1]['start']
+            self.render_page()
+        self.after(10, self._focus_and_select_entry)
+        return "break"
+
+    def _focus_and_select_entry(self):
+        self.txt_section_filename.focus_set()
+        self.txt_section_filename.select_range(0, "end")
+        self.txt_section_filename.icursor("end")
+
+    def _on_section_entry_return(self, event):
+        """Enter押下: Shift+Enterでなければ Tab と同じ挙動"""
+        if event.state & 0x0001:
+            return self.on_shift_enter_execute_key(event)
+        return self._on_section_entry_tab(event)
+
+    def _on_section_entry_focus_out(self, event):
+        """テキストボックスからフォーカスが外れたら保存"""
+        self._save_active_section_filename()
+
+    def _on_section_entry_delete(self, event):
+        """Delete押下: 現在セクションの開始分割点を削除"""
+        self.remove_active_section_split_point()
+        return "break"
+
+    # ------------------------------------------------------------------
+    # 分割点操作
+    # ------------------------------------------------------------------
 
     def add_split_point(self):
         if not self.doc: return
         if self.current_page_idx > 0 and self.current_page_idx not in self.split_points:
+            self._save_active_section_filename()
             self.split_points.append(self.current_page_idx)
             self.split_points.sort()
-            self.update_sections_ui()
+            self._rebuild_sections_data()
             self.update_ui_state()
 
     def remove_split_point(self):
@@ -495,8 +738,9 @@ class App(ctk.CTk):
             return
 
         if self.current_page_idx in self.split_points:
+            self._save_active_section_filename()
             self.split_points.remove(self.current_page_idx)
-            self.update_sections_ui()
+            self._rebuild_sections_data()
             self.update_ui_state()
 
     def clear_split_points(self):
@@ -508,7 +752,7 @@ class App(ctk.CTk):
             return
 
         self.split_points = []
-        self.update_sections_ui()
+        self._rebuild_sections_data()
         self.update_ui_state()
 
     def split_every_page(self):
@@ -528,59 +772,23 @@ class App(ctk.CTk):
         else:
             self.split_points = list(range(1, total_pages))
 
-        self.update_sections_ui()
+        self._rebuild_sections_data()
         self.update_ui_state()
 
-    def update_sections_ui(self):
-        # 既存のウィジェットを削除
-        for widget_dict in self.section_widgets:
-            widget_dict['frame'].destroy()
-        self.section_widgets.clear()
-
-        if not self.doc: return
-
-        points = [0] + self.split_points + [len(self.doc)]
-        for i in range(len(points) - 1):
-            start = points[i]
-            end = points[i+1] - 1
-            
-            # 各セクションを包むフレーム
-            item_frame = ctk.CTkFrame(self.scroll_frame, fg_color="transparent")
-            item_frame.pack(fill="x", pady=2)
-            item_frame.grid_columnconfigure(2, weight=1)
-
-            # 色マーカー (tk.Canvasを使用)
-            color = self.split_bar.colors[i % len(self.split_bar.colors)]
-            marker = tk.Canvas(item_frame, width=15, height=15, bg=color, highlightthickness=0)
-            marker.grid(row=0, column=0, padx=(0, 5))
-
-            lbl_range = ctk.CTkLabel(item_frame, text=f"P.{start+1} - P.{end+1}", width=80, anchor="w")
-            lbl_range.grid(row=0, column=1, padx=5)
-
-            default_filename = f"output_part{i+1}.pdf"
-            txt_filename = ctk.CTkEntry(item_frame)
-            txt_filename.insert(0, default_filename)
-            txt_filename.grid(row=0, column=2, sticky="ew")
-
-            clickable_widgets = [item_frame, marker, lbl_range]
-            for widget in clickable_widgets:
-                widget.bind("<Button-1>", lambda event, s=start: self.on_section_click(s))
-
-            self.section_widgets.append({
-                'frame': item_frame,
-                'entry': txt_filename,
-                'start': start,
-                'end': end
-            })
+    # ------------------------------------------------------------------
+    # UI状態の一括更新
+    # ------------------------------------------------------------------
 
     def update_ui_state(self):
         if self.doc:
             total = len(self.doc)
+            active_idx = self._get_active_section_index()
             self.lbl_page_info.configure(text=f"{self.current_page_idx + 1} / {total}")
-            self.split_bar.update_state(total, self.current_page_idx, self.split_points)
+            self.split_bar.update_state(total, self.current_page_idx, self.split_points, active_idx)
             self.lbl_zoom_info.configure(text=f"倍率: {int(self.preview_zoom * 100)}%")
         else:
             self.lbl_zoom_info.configure(text="倍率: 100%")
+            active_idx = -1
         
         state_prev = "normal" if self.doc and self.current_page_idx > 0 else "disabled"
         state_next = "normal" if self.doc and self.current_page_idx < (len(self.doc)-1 if self.doc else 0) else "disabled"
@@ -589,6 +797,14 @@ class App(ctk.CTk):
         state_clear_split = "normal" if self.doc else "disabled"
         state_split_every_page = "normal" if self.doc and len(self.doc) > 1 else "disabled"
         state_exec = "normal" if self.doc else "disabled"
+        state_prev_sec = "normal" if self.doc and active_idx > 0 else "disabled"
+        state_next_sec = "normal" if self.doc and active_idx < len(self.sections_data) - 1 else "disabled"
+        state_remove_active_section_split = "normal" if (
+            self.doc
+            and active_idx > 0
+            and active_idx < len(self.sections_data)
+            and self.sections_data[active_idx]['start'] in self.split_points
+        ) else "disabled"
 
         if self.is_splitting:
             state_prev = "disabled"
@@ -598,6 +814,9 @@ class App(ctk.CTk):
             state_clear_split = "disabled"
             state_split_every_page = "disabled"
             state_exec = "disabled"
+            state_prev_sec = "disabled"
+            state_next_sec = "disabled"
+            state_remove_active_section_split = "disabled"
 
         self.btn_open.configure(state="disabled" if self.is_splitting else "normal")
         self.btn_prev.configure(state=state_prev)
@@ -609,6 +828,16 @@ class App(ctk.CTk):
         self.btn_clear_split.configure(state=state_clear_split)
         self.btn_split_every_page.configure(state=state_split_every_page)
         self.btn_execute.configure(state=state_exec)
+        self.btn_prev_section.configure(state=state_prev_sec)
+        self.btn_next_section.configure(state=state_next_sec)
+        self.btn_remove_active_section_split.configure(state=state_remove_active_section_split)
+
+        # アクティブセクション表示を更新
+        self._update_active_section_ui()
+
+    # ------------------------------------------------------------------
+    # 分割実行
+    # ------------------------------------------------------------------
 
     def _ensure_unique_output_path(self, output_dir, filename):
         target_path = output_dir / filename
@@ -623,23 +852,20 @@ class App(ctk.CTk):
         return target_path
 
     def _collect_split_jobs(self):
+        """データモデル (sections_data) から分割ジョブを生成する。"""
         jobs = []
 
-        for i, widget_dict in enumerate(self.section_widgets):
-            start = widget_dict['start']
-            end = widget_dict['end']
-            entry = widget_dict['entry']
-
-            filename = entry.get().strip()
+        for i, sec in enumerate(self.sections_data):
+            filename = sec['filename'].strip()
             if not filename:
-                filename = f"output_part{i+1}.pdf"
+                filename = f"output_part{i + 1}.pdf"
             if not filename.lower().endswith(".pdf"):
                 filename += ".pdf"
 
             jobs.append({
                 'index': i + 1,
-                'start': start,
-                'end': end,
+                'start': sec['start'],
+                'end': sec['end'],
                 'filename': filename,
             })
 
@@ -659,10 +885,12 @@ class App(ctk.CTk):
 
     def _split_worker(self, source_pdf_path, out_dir, jobs):
         output_dir = Path(out_dir)
+        current_job_desc = "(初期化中)"
 
         try:
             with fitz.open(source_pdf_path) as source_doc:
                 for job in jobs:
+                    current_job_desc = f"{job['index']}番目のセクション（{job['filename']}）"
                     out_path = self._ensure_unique_output_path(output_dir, job['filename'])
 
                     with fitz.open() as new_doc:
@@ -670,10 +898,12 @@ class App(ctk.CTk):
                         new_doc.save(str(out_path))
 
         except Exception as e:
+            desc = current_job_desc
+            err = str(e)
             self.after(
                 0,
-                lambda: self._on_split_error(
-                    f"{job['index']}番目のセクション（{job['filename']}）の保存中にエラーが発生しました:\n{e}"
+                lambda d=desc, e_str=err: self._on_split_error(
+                    f"{d}の保存中にエラーが発生しました:\n{e_str}"
                 ),
             )
             return
@@ -683,6 +913,9 @@ class App(ctk.CTk):
     def execute_split(self):
         if not self.doc or self.is_splitting:
             return
+
+        # 実行前にアクティブセクションの入力を保存
+        self._save_active_section_filename()
 
         out_dir = filedialog.askdirectory(title="保存先フォルダを選択")
         if not out_dir:
