@@ -152,18 +152,20 @@ class App(ctk.CTk):
         left_frame.grid_columnconfigure(0, weight=1)
 
         # PDFプレビュー領域
-        preview_frame = ctk.CTkFrame(left_frame)
-        preview_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 10))
-        preview_frame.grid_rowconfigure(0, weight=1)
-        preview_frame.grid_columnconfigure(0, weight=1)
+        self.preview_frame = ctk.CTkFrame(left_frame)
+        self.preview_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 10))
+        self.preview_frame.grid_rowconfigure(0, weight=1)
+        self.preview_frame.grid_columnconfigure(0, weight=1)
 
-        self.preview_canvas = tk.Canvas(preview_frame, highlightthickness=0, takefocus=1)
+        self.preview_canvas = tk.Canvas(self.preview_frame, highlightthickness=0, takefocus=1)
         self.preview_canvas.grid(row=0, column=0, sticky="nsew")
         self.preview_canvas.bind("<Button-1>", self.on_preview_mouse_down)
         self.preview_canvas.bind("<B1-Motion>", self.on_preview_mouse_drag)
         self.preview_canvas.bind("<ButtonRelease-1>", self.on_preview_mouse_up)
         self.preview_canvas.bind("<Enter>", self.on_preview_mouse_enter)
         self.preview_canvas.bind("<Leave>", self.on_preview_mouse_leave)
+        self.preview_canvas.bind("<FocusIn>", self.on_preview_focus_in)
+        self.preview_canvas.bind("<FocusOut>", self.on_preview_focus_out)
         self.preview_canvas.bind("<Home>", self.on_preview_home_key)
         self.preview_canvas.bind("<End>", self.on_preview_end_key)
         self.preview_canvas.bind("<Prior>", self.on_preview_pageup_key)
@@ -391,6 +393,16 @@ class App(ctk.CTk):
 
     def on_preview_mouse_leave(self, event):
         self.preview_canvas.configure(cursor="")
+
+    def on_preview_focus_in(self, event):
+        self.preview_canvas.configure(
+            highlightthickness=1,
+            highlightbackground="#3b82f6",
+            highlightcolor="#3b82f6",
+        )
+
+    def on_preview_focus_out(self, event):
+        self.preview_canvas.configure(highlightthickness=0)
 
     def update_preview_cursor(self):
         cursor = "hand2" if self.preview_can_pan else ""
