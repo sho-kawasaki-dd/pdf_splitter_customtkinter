@@ -385,6 +385,14 @@ class App(ctk.CTk):
             self.render_page()
 
     def on_closing(self):
+        if self.is_splitting:
+            should_close = messagebox.askokcancel(
+                "確認",
+                "現在PDFの分割処理中です。強制終了するとファイルが破損する可能性があります。本当に終了しますか？"
+            )
+            if not should_close:
+                return
+
         if self.split_queue_poll_job is not None:
             try:
                 self.after_cancel(self.split_queue_poll_job)
@@ -526,7 +534,10 @@ class App(ctk.CTk):
         if frame_width <= 1 or frame_height <= 1:
             frame_width, frame_height = 500, 600
 
-        cache_key = (self.current_page_idx, round(self.preview_zoom, 2), frame_width, frame_height)
+        fit_ratio = min(frame_width / page_rect.width, frame_height / page_rect.height)
+        final_scale = max(0.01, fit_ratio * self.preview_zoom)
+
+        cache_key = (self.current_page_idx, round(final_scale, 4))
         cached_image = self.preview_render_cache.get(cache_key)
         if cached_image is not None:
             self.preview_render_cache.move_to_end(cache_key)
@@ -534,8 +545,6 @@ class App(ctk.CTk):
             target_width = cached_image.width()
             target_height = cached_image.height()
         else:
-            fit_ratio = min(frame_width / page_rect.width, frame_height / page_rect.height)
-            final_scale = max(0.01, fit_ratio * self.preview_zoom)
             pix = page.get_pixmap(matrix=fitz.Matrix(final_scale, final_scale))
             mode = "RGBA" if pix.alpha else "RGB"
             img = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
@@ -754,7 +763,7 @@ class App(ctk.CTk):
         if idx < len(self.sections_data) - 1:
             self.current_page_idx = self.sections_data[idx + 1]['start']
             self.render_page()
-        self.after(10, self._focus_and_select_entry)
+            self.after(10, self._focus_and_select_entry)
         return "break"
 
     def _focus_and_select_entry(self):
