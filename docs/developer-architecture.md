@@ -38,6 +38,34 @@
 - Viewコンポーネント → Presenterにイベント委譲
 - Model → 外部ライブラリ（PyMuPDF, PIL）へ依存可能だが、Viewには依存しない
 
+### 1.2 プロジェクトツリー
+
+```text
+pdf_splitter_customtkinter/
+├─ main.py
+├─ PDFSplitter.spec
+├─ pyproject.toml
+├─ README.md
+├─ assets/
+├─ docs/
+│  ├─ user-manual.md
+│  ├─ keyboard-shortcuts.md
+│  └─ developer-architecture.md
+├─ model/
+│  ├─ pdf_document.py
+│  ├─ pdf_processor.py
+│  └─ split_session.py
+├─ presenter/
+│  └─ main_presenter.py
+└─ view/
+  ├─ main_window.py
+  ├─ startup_splash.py
+  └─ components/
+    ├─ controls.py
+    ├─ preview.py
+    └─ split_bar.py
+```
+
 ## 2. 責務分離ルール
 
 ### Presenter (`MainPresenter`)

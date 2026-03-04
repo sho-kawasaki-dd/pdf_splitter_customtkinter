@@ -93,12 +93,11 @@
   <link rel="stylesheet" href="../github-markdown.css" />
 </head>
 <body>
-<article class="markdown-body" style="box-sizing: border-box; min-width: 200px; max-width: 980px; margin: 0 auto; padding: 45px;">
 <h1 id="pdf分割アプリ-取扱説明書非開発者向け">PDF分割アプリ
 取扱説明書（非開発者向け）</h1>
 <p>この文書は、PDFを分割して保存するための操作手順を説明します。</p>
 <hr />
-<h2 id="0-はじめに">0. はじめに</h2>
+<h2 id="はじめに">0. はじめに</h2>
 <h3 id="想定する利用シーン">想定する利用シーン</h3>
 <ul>
 <li>1つのPDFを章ごとに分割したい</li>
@@ -111,22 +110,22 @@
 <li>効率的な操作方法（マウス＋キーボード）</li>
 <li>エラーが出たときの対処</li>
 </ul>
-<h2 id="1-このアプリでできること">1. このアプリでできること</h2>
+<h2 id="このアプリでできること">1. このアプリでできること</h2>
 <ul>
 <li>PDFを開いてページを確認できます</li>
 <li>好きな位置に分割点を設定できます</li>
 <li>セクション（分割後ファイル）ごとにファイル名を指定できます</li>
 <li>分割を実行して、複数のPDFとして保存できます</li>
 </ul>
-<h2 id="2-起動方法">2. 起動方法</h2>
-<h3 id="20-動作条件">2.0 動作条件</h3>
+<h2 id="起動方法">2. 起動方法</h2>
+<h3 id="動作条件">2.0 動作条件</h3>
 <ul>
 <li>対応OS: Windows（本ワークスペースの検証環境）</li>
 <li>Python実行時: <code>pyproject.toml</code> 設定は
 <code>&gt;=3.14</code></li>
 <li>入力形式: <code>.pdf</code></li>
 </ul>
-<h3 id="21-ソース実行開発環境がある場合">2.1
+<h3 id="ソース実行開発環境がある場合">2.1
 ソース実行（開発環境がある場合）</h3>
 <ol type="1">
 <li><p>Pythonを準備します（<code>pyproject.toml</code> 設定:
@@ -138,14 +137,19 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="
 <li><p>アプリを起動します</p>
 <div class="sourceCode" id="cb2"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> main.py</span></code></pre></div></li>
+<li><p>起動時表示を確認します</p></li>
 </ol>
-<h3 id="22-実行ファイル配布版exe-など">2.2 実行ファイル配布版（.exe
+<p>起動直後に、中央へ白背景のスプラッシュ（アプリアイコン）が表示されます。<br />
+スプラッシュは最小1秒表示され、初期化完了後に自動で閉じます。</p>
+<h3 id="実行ファイル配布版.exe-など">2.2 実行ファイル配布版（.exe
 など）</h3>
 <ul>
 <li>配布された実行ファイルをダブルクリックして起動します</li>
+<li>初回起動時はSmartScreen警告が出る可能性がありますが、「詳細情報」→「実行」を選択してください</li>
+<li>起動直後に、中央へ白背景のスプラッシュ（アプリアイコン）が表示されます</li>
 <li>操作方法はこの文書と同じです</li>
 </ul>
-<h2 id="3-画面の見方">3. 画面の見方</h2>
+<h2 id="画面の見方">3. 画面の見方</h2>
 <ul>
 <li>左エリア
 <ul>
@@ -163,7 +167,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="
 <li>「分割を実行」</li>
 </ul></li>
 </ul>
-<h3 id="31-分割バーの見方">3.1 分割バーの見方</h3>
+<h3 id="分割バーの見方">3.1 分割バーの見方</h3>
 <ul>
 <li>色の帯: セクションの区切りを表します</li>
 <li>黒い縦線: 分割点です</li>
@@ -171,7 +175,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="
 <li>白い逆三角: 現在表示中のページです</li>
 </ul>
 <p>分割バーはクリック・ドラッグでページ移動できます。</p>
-<h2 id="4-基本操作通常フロー">4. 基本操作（通常フロー）</h2>
+<h2 id="基本操作通常フロー">4. 基本操作（通常フロー）</h2>
 <ol type="1">
 <li>「PDFを開く」を押して対象PDFを選びます</li>
 <li>分割したいページへ移動します</li>
@@ -180,21 +184,21 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="
 <li>「分割を実行」を押し、保存先フォルダを選びます</li>
 <li>完了メッセージが表示されたら保存完了です</li>
 </ol>
-<h3 id="41-おすすめの実務フロー">4.1 おすすめの実務フロー</h3>
+<h3 id="おすすめの実務フロー">4.1 おすすめの実務フロー</h3>
 <ol type="1">
 <li>大まかに分割点を追加</li>
 <li>「前のセクション」「次のセクション」で境界を確認</li>
 <li>必要なセクションだけファイル名を編集</li>
 <li>最後にまとめて「分割を実行」</li>
 </ol>
-<h3 id="42-1ページずつ分割する場合">4.2 1ページずつ分割する場合</h3>
+<h3 id="ページずつ分割する場合">4.2 1ページずつ分割する場合</h3>
 <ol type="1">
 <li>「全体を1ページずつ分割する」を押す</li>
 <li>必要なら一部セクションのファイル名だけ変更</li>
 <li>「分割を実行」で保存</li>
 </ol>
 <p>注意: この操作は既存の分割点を上書きします。</p>
-<h2 id="5-ファイル名のルール">5. ファイル名のルール</h2>
+<h2 id="ファイル名のルール">5. ファイル名のルール</h2>
 <p>入力したファイル名は自動で整形されます。</p>
 <ul>
 <li>不可文字 <code>\\ / : * ? " &lt; &gt; |</code> は <code>_</code>
@@ -203,9 +207,9 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="
 <li>拡張子 <code>.pdf</code> は自動調整されます</li>
 <li>無効な名前（空、予約語など）は既定名に戻ります</li>
 </ul>
-<h3 id="51-具体例">5.1 具体例</h3>
+<h3 id="具体例">5.1 具体例</h3>
 <ul>
-<li>入力: <code> 請求書:2026/03 </code> → 出力:
+<li>入力: ” 請求書:2026/03 ” → 出力:
 <code>請求書_2026_03.pdf</code></li>
 <li>入力: <code>CON</code>（予約語）→ 出力:
 <code>output_partN.pdf</code>（既定名）</li>
@@ -214,8 +218,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="
 </ul>
 <h3 id="既定名">既定名</h3>
 <ul>
-<li><code>output_part1.pdf</code>, <code>output_part2.pdf</code>
-...</li>
+<li><code>output_part1.pdf</code>, <code>output_part2.pdf</code> …</li>
 </ul>
 <h3 id="同名ファイルが既にある場合">同名ファイルが既にある場合</h3>
 <p>既存ファイルと重複しないように、自動で連番が付きます。</p>
@@ -223,33 +226,33 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="
 <li>例: <code>output_part1.pdf</code> →
 <code>output_part1 (1).pdf</code></li>
 </ul>
-<h2 id="6-よく使う操作">6. よく使う操作</h2>
+<h2 id="よく使う操作">6. よく使う操作</h2>
 <ul>
 <li>現在ページの分割点を消す: 「現在のページの分割点を消去」</li>
 <li>すべての分割点を消す: 「すべての分割点をリセット」</li>
 <li>1ページずつ分割したい: 「全体を1ページずつ分割する」</li>
 <li>セクション単位で移動: 「前のセクション」「次のセクション」</li>
 </ul>
-<h3 id="61-入力欄の便利操作">6.1 入力欄の便利操作</h3>
+<h3 id="入力欄の便利操作">6.1 入力欄の便利操作</h3>
 <ul>
 <li><code>Enter</code> / <code>Tab</code>: 名前保存 →
 次セクションへ移動</li>
 <li><code>Shift + Enter</code>: そのまま分割実行</li>
 <li><code>Delete</code>: 現在セクション開始の分割点を削除</li>
 </ul>
-<h2 id="7-分割実行中の注意">7. 分割実行中の注意</h2>
+<h2 id="分割実行中の注意">7. 分割実行中の注意</h2>
 <ul>
 <li>実行中は主要操作が無効になります</li>
 <li>実行中に終了しようとすると確認ダイアログが表示されます</li>
 <li>実行中はPDFを開き直せません</li>
 </ul>
-<h3 id="71-安全に運用するコツ">7.1 安全に運用するコツ</h3>
+<h3 id="安全に運用するコツ">7.1 安全に運用するコツ</h3>
 <ul>
 <li>出力先フォルダを毎回確認する</li>
 <li>同名ファイルが多いフォルダでは、完了後に生成ファイル数を確認する</li>
 <li>大きなPDFでは処理時間が長くなるため、完了メッセージが出るまで待つ</li>
 </ul>
-<h2 id="8-エラー時の対処">8. エラー時の対処</h2>
+<h2 id="エラー時の対処">8. エラー時の対処</h2>
 <h3 id="保存エラーファイル使用中">保存エラー（ファイル使用中）</h3>
 <ul>
 <li>メッセージ例: 保存先ファイルが他アプリで使用中</li>
@@ -264,9 +267,13 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="
 <li>分割対象セクションが存在しない場合はエラーになります</li>
 <li>PDFを開き直し、分割点を確認してから再実行してください</li>
 </ul>
-<h3 id="81-トラブルシューティング一覧">8.1
-トラブルシューティング一覧</h3>
+<h3 id="トラブルシューティング一覧">8.1 トラブルシューティング一覧</h3>
 <table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
 <thead>
 <tr>
 <th>症状</th>
@@ -292,11 +299,10 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="
 </tr>
 </tbody>
 </table>
-<h2 id="9-ショートカット">9. ショートカット</h2>
-<p>詳しくは <a href="keyboard-shortcuts.html">keyboard-shortcuts.html</a>
+<h2 id="ショートカット">9. ショートカット</h2>
+<p>詳しくは <a href="keyboard-shortcuts.md">keyboard-shortcuts.md</a>
 を参照してください。</p>
 <hr />
 <p>改訂時は、UIラベル変更やキー変更に合わせてこの文書も更新してください。</p>
-</article>
 </body>
 </html>

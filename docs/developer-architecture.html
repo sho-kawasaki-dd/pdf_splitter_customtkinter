@@ -28,22 +28,22 @@
   <link rel="stylesheet" href="../github-markdown.css" />
 </head>
 <body>
-<article class="markdown-body" style="box-sizing: border-box; min-width: 200px; max-width: 980px; margin: 0 auto; padding: 45px;">
 <h1 id="開発者向け設計ドキュメント">開発者向け設計ドキュメント</h1>
 <p>このアプリはMVP（Model / View / Presenter）で構成されています。</p>
 <hr />
-<h2 id="0-目的">0. 目的</h2>
+<h2 id="目的">0. 目的</h2>
 <p>この文書の目的は、次の3点を明確にすることです。</p>
 <ul>
 <li>どの層に何を置くか（責務境界）</li>
 <li>変更時にどこへ影響が波及するか（依存関係）</li>
 <li>どの順番で改修すると安全か（実装フロー）</li>
 </ul>
-<h2 id="1-全体構成">1. 全体構成</h2>
+<h2 id="全体構成">1. 全体構成</h2>
 <ul>
 <li>エントリーポイント: <code>main.py</code>
 <ul>
 <li><code>MainWindow</code> を生成</li>
+<li>起動時スプラッシュを表示（<code>view/startup_splash.py</code>）</li>
 <li><code>MainPresenter</code> を注入</li>
 <li><code>mainloop()</code> 開始</li>
 </ul></li>
@@ -61,10 +61,11 @@
 <li>View:
 <ul>
 <li><code>view/main_window.py</code>（トップレベル、Presenter接続、ダイアログ）</li>
+<li><code>view/startup_splash.py</code>（起動時スプラッシュ表示）</li>
 <li><code>view/components/*.py</code>（ウィジェット群）</li>
 </ul></li>
 </ul>
-<h3 id="11-依存の向き">1.1 依存の向き</h3>
+<h3 id="依存の向き">1.1 依存の向き</h3>
 <ul>
 <li><code>main.py</code> → View / Presenter を組み立てる</li>
 <li>Presenter → Model と View に依存</li>
@@ -72,7 +73,31 @@
 <li>Model → 外部ライブラリ（PyMuPDF,
 PIL）へ依存可能だが、Viewには依存しない</li>
 </ul>
-<h2 id="2-責務分離ルール">2. 責務分離ルール</h2>
+<h3 id="プロジェクトツリー">1.2 プロジェクトツリー</h3>
+<pre class="text"><code>pdf_splitter_customtkinter/
+├─ main.py
+├─ PDFSplitter.spec
+├─ pyproject.toml
+├─ README.md
+├─ assets/
+├─ docs/
+│  ├─ user-manual.md
+│  ├─ keyboard-shortcuts.md
+│  └─ developer-architecture.md
+├─ model/
+│  ├─ pdf_document.py
+│  ├─ pdf_processor.py
+│  └─ split_session.py
+├─ presenter/
+│  └─ main_presenter.py
+└─ view/
+  ├─ main_window.py
+  ├─ startup_splash.py
+  └─ components/
+    ├─ controls.py
+    ├─ preview.py
+    └─ split_bar.py</code></pre>
+<h2 id="責務分離ルール">2. 責務分離ルール</h2>
 <h3 id="presenter-mainpresenter">Presenter
 (<code>MainPresenter</code>)</h3>
 <ul>
@@ -115,9 +140,9 @@ PIL）へ依存可能だが、Viewには依存しない</li>
 <li>View層で業務ルール（分割可否など）を判定しない</li>
 <li>View内のイベントハンドラは、可能な限りPresenter呼び出し＋<code>break</code>返却に限定する</li>
 </ul>
-<h2 id="3-主要データ">3. 主要データ</h2>
+<h2 id="主要データ">3. 主要データ</h2>
 <h3
-id="uistateviewmain_windowpy"><code>UiState</code>（<code>view/main_window.py</code>）</h3>
+id="uistateviewmain_window.py"><code>UiState</code>（<code>view/main_window.py</code>）</h3>
 <p>PresenterからViewへ渡す表示状態DTO。</p>
 <ul>
 <li>ページ情報（<code>page_info_text</code>,
@@ -149,7 +174,7 @@ id="sections_datasplitsession"><code>sections_data</code>（<code>SplitSession</
 <li><code>split_points</code> 変更後は必ず
 <code>_rebuild_sections_data()</code> で再構築される</li>
 </ul>
-<h3 id="31-分割ジョブ構造">3.1 分割ジョブ構造</h3>
+<h3 id="分割ジョブ構造">3.1 分割ジョブ構造</h3>
 <p><code>collect_split_jobs()</code> の戻り値要素:</p>
 <ul>
 <li><code>index</code>: 1始まりの連番</li>
@@ -157,8 +182,8 @@ id="sections_datasplitsession"><code>sections_data</code>（<code>SplitSession</
 <li><code>end</code>: 終了ページ（0始まり）</li>
 <li><code>filename</code>: 出力ファイル名（<code>.pdf</code> 付き）</li>
 </ul>
-<h2 id="4-主要フロー">4. 主要フロー</h2>
-<h3 id="41-uiイベント--再描画フロー">4.1 UIイベント → 再描画フロー</h3>
+<h2 id="主要フロー">4. 主要フロー</h2>
+<h3 id="uiイベント-再描画フロー">4.1 UIイベント → 再描画フロー</h3>
 <pre class="mermaid"><code>flowchart TD
     A[User Action in View] --&gt; B[MainPresenter handler]
     B --&gt; C{Model state change?}
@@ -186,7 +211,7 @@ id="sections_datasplitsession"><code>sections_data</code>（<code>SplitSession</
 <li>分割点だけ変わる操作では <code>_refresh_ui()</code>
 のみで済ませる</li>
 </ul>
-<h3 id="42-分割実行非同期フロー">4.2 分割実行（非同期）フロー</h3>
+<h3 id="分割実行非同期フロー">4.2 分割実行（非同期）フロー</h3>
 <pre class="mermaid"><code>flowchart TD
     A[MainPresenter.execute_split] --&gt; B[View.ask_directory]
     B --&gt; C[SplitSession.collect_split_jobs]
@@ -211,7 +236,7 @@ id="sections_datasplitsession"><code>sections_data</code>（<code>SplitSession</
 <li>失敗時は <code>type=error</code> のメッセージを優先してUIへ返す</li>
 <li>完了時は <code>type=success</code> と作成ファイル数を通知する</li>
 </ul>
-<h3 id="43-終了処理フロー">4.3 終了処理フロー</h3>
+<h3 id="終了処理フロー">4.3 終了処理フロー</h3>
 <ol type="1">
 <li>分割中なら確認ダイアログを表示</li>
 <li>ポーリングジョブがあれば <code>after_cancel</code></li>
@@ -219,7 +244,7 @@ id="sections_datasplitsession"><code>sections_data</code>（<code>SplitSession</
 <li>View破棄</li>
 </ol>
 <p>この順序を崩すと、終了間際のコールバックで例外が出る可能性があります。</p>
-<h2 id="5-キーバインド責務">5. キーバインド責務</h2>
+<h2 id="キーバインド責務">5. キーバインド責務</h2>
 <ul>
 <li>プレビュー上キー: <code>view/components/preview.py</code></li>
 <li>ファイル名入力欄キー:
@@ -229,14 +254,14 @@ id="sections_datasplitsession"><code>sections_data</code>（<code>SplitSession</
 </ul>
 <p>実装を変更した場合は、<code>docs/keyboard-shortcuts.md</code>
 も更新してください。</p>
-<h3 id="51-変更時のチェック観点">5.1 変更時のチェック観点</h3>
+<h3 id="変更時のチェック観点">5.1 変更時のチェック観点</h3>
 <ul>
 <li>同じキーが複数層で競合していないか</li>
 <li><code>Shift</code>
 判定分岐（<code>event.state</code>）が期待どおりか</li>
 <li>テンキー <code>KP_Enter</code> の対応漏れがないか</li>
 </ul>
-<h2 id="6-拡張時の指針">6. 拡張時の指針</h2>
+<h2 id="拡張時の指針">6. 拡張時の指針</h2>
 <ul>
 <li>新しい機能はまず <code>MainPresenter</code>
 のユースケース単位で追加</li>
@@ -246,7 +271,7 @@ id="sections_datasplitsession"><code>sections_data</code>（<code>SplitSession</
 に閉じ込め、Viewに直接スレッドを持ち込まない</li>
 <li>Viewコンポーネントは表示責務に限定し、業務ロジックを置かない</li>
 </ul>
-<h3 id="61-典型的な改修手順">6.1 典型的な改修手順</h3>
+<h3 id="典型的な改修手順">6.1 典型的な改修手順</h3>
 <ol type="1">
 <li>ユースケースをPresenterのメソッドとして定義</li>
 <li>必要な状態をModelへ追加</li>
@@ -254,14 +279,14 @@ id="sections_datasplitsession"><code>sections_data</code>（<code>SplitSession</
 <li>Viewコンポーネントを最小変更で更新</li>
 <li>ドキュメント（本書 + user-manual + keyboard-shortcuts）を同期</li>
 </ol>
-<h3 id="62-改修時のアンチパターン">6.2 改修時のアンチパターン</h3>
+<h3 id="改修時のアンチパターン">6.2 改修時のアンチパターン</h3>
 <ul>
 <li>View側に <code>if split_points ...</code>
 のような業務判定を増やす</li>
 <li>PresenterからTkウィジェットへ直接アクセスする</li>
 <li>Modelからメッセージボックス表示を呼ぶ</li>
 </ul>
-<h2 id="7-ドキュメント保守ポイント">7. ドキュメント保守ポイント</h2>
+<h2 id="ドキュメント保守ポイント">7. ドキュメント保守ポイント</h2>
 <ul>
 <li>Viewイベント追加・キー追加時:
 <code>docs/keyboard-shortcuts.md</code> を更新</li>
@@ -271,6 +296,5 @@ id="sections_datasplitsession"><code>sections_data</code>（<code>SplitSession</
 </ul>
 <hr />
 <p>将来、バッチ処理やCLIを追加する場合も、Presenterをユースケース境界として維持すると段階移行が容易です。</p>
-</article>
 </body>
 </html>

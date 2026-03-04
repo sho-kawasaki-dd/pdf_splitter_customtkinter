@@ -93,7 +93,6 @@
   <link rel="stylesheet" href="github-markdown.css" />
 </head>
 <body>
-<article class="markdown-body" style="box-sizing: border-box; min-width: 200px; max-width: 980px; margin: 0 auto; padding: 45px;">
 <h1 id="pdf-splitter-customtkinter">PDF Splitter (CustomTkinter)</h1>
 <p>PDFをページ単位のセクションに分割して保存する、デスクトップアプリケーションです。<br />
 <code>main.py</code> から起動し、MVP（Model / View /
@@ -111,32 +110,6 @@ Presenter）構成で実装されています。</p>
 <li>全ページを1ページずつ分割</li>
 <li>バックグラウンドで分割処理を実行</li>
 </ul>
-<h2 id="最短で起動するソース実行">最短で起動する（ソース実行）</h2>
-<ol type="1">
-<li><p>Pythonを用意（<code>pyproject.toml</code> では
-<code>&gt;=3.14</code>）</p></li>
-<li><p>任意の仮想環境を有効化</p></li>
-<li><p>依存をインストール</p>
-<div class="sourceCode" id="cb1"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="at">-U</span> customtkinter pillow pymupdf</span></code></pre></div></li>
-<li><p>アプリを起動</p>
-<div class="sourceCode" id="cb2"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> main.py</span></code></pre></div></li>
-</ol>
-<p>補足:</p>
-<ul>
-<li>起動後、まず「PDFを開く」で対象ファイルを選択します</li>
-<li>分割実行時に保存先フォルダを都度選択します</li>
-</ul>
-<h2 id="実行ファイル配布版を使う場合">実行ファイル配布版を使う場合</h2>
-<p>配布された実行ファイル（例:
-<code>.exe</code>）を起動してください。<br />
-操作方法はソース実行版と同じです。</p>
-<p>配布版での確認ポイント:</p>
-<ul>
-<li>セキュリティ警告が表示された場合は、配布元の案内に従って実行許可を行います</li>
-<li>保存先に書き込み権限があるフォルダを選択してください</li>
-</ul>
 <h2 id="ドキュメント">ドキュメント</h2>
 <ul>
 <li>非開発者向け取扱説明書: <a
@@ -152,6 +125,67 @@ href="docs/developer-architecture.html">docs/developer-architecture.html</a></li
 <code>keyboard-shortcuts</code></li>
 <li>改修する: <code>developer-architecture</code> →
 該当ソースコード</li>
+<li>起動表示を改修する: <code>main.py</code> と
+<code>view/startup_splash.py</code></li>
+</ul>
+<h2 id="最短で起動するソース実行">最短で起動する（ソース実行）</h2>
+<ol type="1">
+<li><p>Pythonを用意（<code>pyproject.toml</code> では
+<code>&gt;=3.14</code>）</p></li>
+<li><p>任意の仮想環境を有効化</p></li>
+<li><p>依存をインストール</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="at">-U</span> customtkinter pillow pymupdf</span></code></pre></div></li>
+<li><p>アプリを起動</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> main.py</span></code></pre></div></li>
+<li><p>起動表示を確認</p>
+<ul>
+<li>起動時に中央へスプラッシュが表示されます（白背景 +
+アプリアイコン）</li>
+<li>スプラッシュは最小1秒表示され、初期化完了後に自動で閉じます</li>
+</ul></li>
+</ol>
+<p>補足:</p>
+<ul>
+<li>起動後、まず「PDFを開く」で対象ファイルを選択します</li>
+<li>分割実行時に保存先フォルダを都度選択します</li>
+</ul>
+<h2
+id="windowsで実行ファイルを作成するonedir">Windowsで実行ファイルを作成する（onedir）</h2>
+<ol type="1">
+<li><p>仮想環境を有効化し、依存をインストール</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="at">-U</span> customtkinter pillow pymupdf pyinstaller</span></code></pre></div></li>
+<li><p><code>main.py</code> を起点にビルド</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pyinstaller</span> <span class="at">--noconfirm</span> <span class="at">--clean</span> <span class="at">--name</span> PDFSplitter <span class="at">--windowed</span> <span class="at">--onedir</span> <span class="at">--icon</span> pdf_splitter_icon.ico <span class="at">--collect-all</span> customtkinter <span class="at">--collect-binaries</span> pymupdf main.py</span></code></pre></div></li>
+<li><p>生成物を確認</p>
+<ul>
+<li>実行ファイル: <code>dist/PDFSplitter/PDFSplitter.exe</code></li>
+<li>specファイル: <code>PDFSplitter.spec</code></li>
+</ul></li>
+<li><p>動作確認</p>
+<ul>
+<li><code>dist/PDFSplitter/PDFSplitter.exe</code> を起動</li>
+<li>起動時にスプラッシュが表示されることを確認</li>
+<li>「PDFを開く」→分割→保存まで実行できることを確認</li>
+</ul></li>
+</ol>
+<p>補足:</p>
+<ul>
+<li>初回起動時に SmartScreen 警告が表示される場合があります</li>
+<li>onedir は onefile
+より起動が安定しやすく、トラブルシュートが容易です</li>
+</ul>
+<h2 id="実行ファイル配布版を使う場合">実行ファイル配布版を使う場合</h2>
+<p>配布された実行ファイル（例:
+<code>.exe</code>）を起動してください。<br />
+操作方法はソース実行版と同じです。</p>
+<p>配布版での確認ポイント:</p>
+<ul>
+<li>セキュリティ警告が表示された場合は、配布元の案内に従って実行許可を行います</li>
+<li>保存先に書き込み権限があるフォルダを選択してください</li>
 </ul>
 <h2 id="よくあるトラブル">よくあるトラブル</h2>
 <ul>
@@ -173,6 +207,12 @@ href="docs/developer-architecture.html">docs/developer-architecture.html</a></li
 を更新</li>
 <li>導線や起動手順を変更したら、この <code>README.md</code> を更新</li>
 </ul>
-</article>
+<h3 id="markdown-から-html-を再生成する">Markdown から HTML
+を再生成する</h3>
+<p>PowerShell で次を実行すると、<code>README.md</code> と
+<code>docs/*.md</code> を <code>github-markdown.css</code> を参照する
+HTML に変換できます。</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="op">./</span>scripts<span class="op">/</span>build-docs-html<span class="op">.</span><span class="fu">ps1</span></span></code></pre></div>
 </body>
 </html>
