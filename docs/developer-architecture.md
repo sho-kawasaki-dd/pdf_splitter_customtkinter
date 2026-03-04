@@ -16,6 +16,7 @@
 
 - エントリーポイント: `main.py`
   - `MainWindow` を生成
+  - 起動時スプラッシュを表示（`view/startup_splash.py`）
   - `MainPresenter` を注入
   - `mainloop()` 開始
 - Presenter: `presenter/main_presenter.py`
@@ -27,6 +28,7 @@
   - `model/pdf_processor.py`（非同期分割処理）
 - View:
   - `view/main_window.py`（トップレベル、Presenter接続、ダイアログ）
+  - `view/startup_splash.py`（起動時スプラッシュ表示）
   - `view/components/*.py`（ウィジェット群）
 
 ### 1.1 依存の向き
