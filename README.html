@@ -113,11 +113,11 @@ Presenter）構成で実装されています。</p>
 <h2 id="ドキュメント">ドキュメント</h2>
 <ul>
 <li>非開発者向け取扱説明書: <a
-href="docs/user-manual.html">docs/user-manual.html</a></li>
+href="docs/user-manual.md">docs/user-manual.md</a></li>
 <li>ショートカット一覧: <a
-href="docs/keyboard-shortcuts.html">docs/keyboard-shortcuts.html</a></li>
+href="docs/keyboard-shortcuts.md">docs/keyboard-shortcuts.md</a></li>
 <li>開発者向け設計・フロー図: <a
-href="docs/developer-architecture.html">docs/developer-architecture.html</a></li>
+href="docs/developer-architecture.md">docs/developer-architecture.md</a></li>
 </ul>
 <p>読み進め方の目安:</p>
 <ul>
@@ -157,9 +157,12 @@ id="windowsで実行ファイルを作成するonedir">Windowsで実行ファイ
 <li><p>仮想環境を有効化し、依存をインストール</p>
 <div class="sourceCode" id="cb3"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="at">-U</span> customtkinter pillow pymupdf pyinstaller</span></code></pre></div></li>
-<li><p><code>main.py</code> を起点にビルド</p>
+<li><p><code>PDFSplitter.spec</code> を使ってビルド</p>
 <div class="sourceCode" id="cb4"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pyinstaller</span> <span class="at">--noconfirm</span> <span class="at">--clean</span> <span class="at">--name</span> PDFSplitter <span class="at">--windowed</span> <span class="at">--onedir</span> <span class="at">--icon</span> pdf_splitter_icon.ico <span class="at">--collect-all</span> customtkinter <span class="at">--collect-binaries</span> pymupdf main.py</span></code></pre></div></li>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pyinstaller</span> <span class="at">--noconfirm</span> <span class="at">--clean</span> PDFSplitter.spec</span></code></pre></div>
+<p>または PowerShell スクリプトを実行:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="op">.</span>\scripts\build-exe<span class="op">.</span><span class="fu">ps1</span></span></code></pre></div></li>
 <li><p>生成物を確認</p>
 <ul>
 <li>実行ファイル: <code>dist/PDFSplitter/PDFSplitter.exe</code></li>
@@ -212,7 +215,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="
 <p>PowerShell で次を実行すると、<code>README.md</code> と
 <code>docs/*.md</code> を <code>github-markdown.css</code> を参照する
 HTML に変換できます。</p>
-<div class="sourceCode" id="cb5"><pre
-class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="op">./</span>scripts<span class="op">/</span>build-docs-html<span class="op">.</span><span class="fu">ps1</span></span></code></pre></div>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="op">./</span>scripts<span class="op">/</span>build-docs-html<span class="op">.</span><span class="fu">ps1</span></span></code></pre></div>
 </body>
 </html>

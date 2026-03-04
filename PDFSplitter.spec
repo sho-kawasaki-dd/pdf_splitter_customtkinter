@@ -8,6 +8,7 @@ hiddenimports = []
 binaries += collect_dynamic_libs('pymupdf')
 tmp_ret = collect_all('customtkinter')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+datas += [('pdf_splitter_icon.ico', '.')]
 
 
 a = Analysis(
